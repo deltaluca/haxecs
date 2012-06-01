@@ -19,7 +19,7 @@ class HaxeParser {
 	static var identR = ~/[a-zA-Z_][a-zA-Z_0-9]*/;
 
 	static var intR = ~/([0-9]+)|(0x[0-9a-fA-F]+)/;
-	static var floatR = ~/[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?/;
+	static var floatR = ~/([0-9]*\.[0-9]+([eE][-+]?[0-9]+)?)|([0-9]+[eE][-+]?[0-9]+)/;
 	public static var stringR = ~/("((\\")|[^"])*")|('((\\')|[^'])*')/;
 	
 	//whitespace

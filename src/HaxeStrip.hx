@@ -21,9 +21,10 @@ enum Cond {
 	eAnd(a:Cond,b:Cond);
 	eOr(a:Cond,b:Cond);
 }
+typedef Data = Array<Strip>;
 enum Strip {
 	sData(x:String);
-	sStatement(statement:{ifc:Cond, ifd:String, elseifs:Array<{cond:Cond,rest:String}>, elsed:String});
+	sStatement(statement:{ifc:Cond, ifd:Data, elseifs:Array<{cond:Cond,rest:Data}>, elsed:Data});
 }
 
 class HaxeStrip {
@@ -55,14 +56,14 @@ class HaxeStrip {
 	//preprocessor statement.
 	static var preprocessP = ParserM.dO({
 		ifP; c <= exprP;
-		d <= restP;
+		d <= dataP;
 		elseifs <= ParserM.dO({
 			elseifP; c <= exprP;
-			d <= restP;
+			d <= dataP;
 			ret({cond:c,rest:d});
 		}).many();
 		elsed <= HaxeParser.maybe(ParserM.dO({
-			elseP; restP;
+			elseP; dataP;
 		}));
 		endP;
 
@@ -79,10 +80,12 @@ class HaxeStrip {
 
 	//---------------------------------------------------------
 
-	static var parser = [
+	static var dataP = [
 		restP.then(function (x) return sData(x)),
 		preprocessP.then(function (x) return sStatement(x))
-	].ors().many().memo();
+	].ors().many();
+
+	static var parser = dataP.lazyF().memo();
 		
 	static function parse(file:String) {
 		switch(parser()(file.reader())) {
@@ -108,22 +111,28 @@ class HaxeStrip {
 			};
 		}
 
-		var res = parse(file);
-		var out = "";
-		for(r in res) {
-			switch(r) {
-				case sData(x): out += x;
+		function unparse(data:Data) {
+			var out = "";
+			for(r in data) {
+				out += switch(r) {
+				case sData(x): x;
 				case sStatement(stat):
-					if(check(stat.ifc)) out += stat.ifd;
+					if(check(stat.ifc)) unparse(stat.ifd);
 					else {
-						var outp = false;
+						var out = null;
 						for(eif in stat.elseifs) {
-							if(check(eif.cond)) { out += eif.rest; outp = true; break; }
+							if(check(eif.cond)) { out = unparse(eif.rest); break; }
 						}
-						if(!outp && stat.elsed!=null) out += stat.elsed;
+						if(out!=null) out;
+						else if(stat.elsed!=null) unparse(stat.elsed);
+						else "";
 					}
-			}	
+				}
+			}
+			return out;
 		}
-		return out;
+
+		var res = parse(file);
+		return unparse(res);
 	}
 }
