@@ -22,6 +22,45 @@ enum UnopFlag {
 	fPre; fPost;
 }
 
+enum Access {
+	aPublic; aPrivate; aStatic; aOverride; aInline;
+}
+
+typedef Typedef = {
+	classname:String,
+	alias:String
+};
+typedef Member = {
+	name:String,
+	accessors:Array<Access>,
+	type:Null<String>,
+	value:Null<Expr>
+};
+typedef Method = {
+	name:String,
+	accessors:Array<Access>,
+	f:FuncExpr
+};
+typedef Property = {
+	name:String,
+	type:String,
+	getter:String,
+	setter:String,
+	accessors:Array<Access>
+};
+typedef HClass = {
+	name:String,
+	sclass:Null<String>,
+	members:Array<Member>,
+	methods:Array<Method>,
+	properties:Array<Property>
+};
+typedef File = {
+	pname:String,
+	classes:Array<HClass>,
+	typedefs:Array<Typedef>
+};
+
 enum Expr {
 	eConst(c:Constant);
 	eArray(xs:Array<Expr>);

@@ -423,8 +423,67 @@ class HaxeParser {
 	static var exprP = exprCP;
 
 	//-----------------------------------------------------------------------------
+
+	static var accessorsP = [publicP,privateP,inlineP,overrideP,staticP].ors().many();
+
+	static var tdefP = ParserM.dO({
+		typedefP; c <= typeP; assignP; a <= identP; semicolP.option();
+		ret({classname:c,alias:a});
+	});
+	static var packP = ParserM.dO({
+		packageP; n <= identP.repsep(dotP).then(function (xs) return xs.join(".")); semicolP; ret(n);
+	}).or("".success());
+
+	static var propertyP = ParserM.dO({
+		as <= accessorsP; varP; n <= identP;
+		lParP; g <= identP; commaP; s <= identP; rParP;
+		colonP; t <= typeP; semicolP;
+		ret({name:n,type:t,getter:g,setter:g,accessors:as});
+	});
+	static var memberP = ParserM.dO({
+		as <= accessorsP; varP; n <= identP;
+		t <= maybe(ParserM.dO({ colonP; typeP; }));
+		v <= maybe(ParserM.dO({ assignP; exprP; }));
+		semicolP;
+		ret({name:n,accessors:as,type:t,value:v});
+	});
+	static var methodP = ParserM.dO({
+		as <= accessorsP; functionP; n <= identP;
+		f <= funcexprP;
+		ret({name:n,accessors:as,f:f});
+	});
+
+	static var hclassP = ParserM.dO({
+		classP; n <= identP;
+		ext <= maybe(ParserM.dO({ extendsP; typeP; }));
+		lBraceP;
+			props <= [].success();
+			meths <= [].success();
+			membs <= [].success();
+			[
+				propertyP.then(function(p) props.push(p)),
+				memberP.then(function (p) membs.push(p)),
+				methodP.then(function (p) meths.push(p))
+			].ors().many();
+		rBraceP;
+		semicolP.option();
+		ret({name:n,sclass:ext,members:membs,properties:props,methods:meths});
+	});
+
+	static var fileP = ParserM.dO({
+		pack <= packP;
+		classes <= [].success();
+		typedefs <= [].success();
+		[
+			hclassP.then(function (c) classes.push(c)),
+			tdefP.then(function (t) typedefs.push(t))
+		].ors().many();
+		ret({pname:pack,classes:classes,typedefs:typedefs});
+	});
+
+	//-----------------------------------------------------------------------------
 	
-	static var parser = exprP.lazyF().memo();
+	static var parser = fileP.lazyF().memo();
 
 	public static function parse(file:String) {
 		switch(parser()(file.reader())) {
