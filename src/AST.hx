@@ -44,6 +44,7 @@ enum Expr {
 	eTry(e:Expr, catches:Array<{type:String,name:String,expr:Expr}>);
 	eNew(type:String, args:Array<Expr>);
 	eSwitch(eon:Expr, cases:Array<{val:Constant,expr:Expr}>, def:Null<Expr>);
+	eVars(vars:Array<{type:Null<String>,name:String,expr:Null<Expr>}>);
 }
 
 typedef Param = {

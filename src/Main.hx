@@ -7,10 +7,9 @@ class Main {
 	static function main() {
 		test(
 "
-	switch(a+b) {
-		case 1: 1;
-		case 1: 1;
-	}
+{
+	var a = 10, b:Int = 20;
+}
 "
 );
 	}

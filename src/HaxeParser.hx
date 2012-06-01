@@ -254,6 +254,8 @@ class HaxeParser {
 			[default: expr;]?
 		}
 
+		var ident : type = expr ...
+
 		constant
 	*/
 	static var expr0aP = [
@@ -309,6 +311,16 @@ class HaxeParser {
 				cases1 <= ParserM.dO({ caseP; x <= constantP; colonP; e <= exprP; semicolP; ret({ val:x, expr:e}); }).many();
 			rBraceP;
 			ret(eSwitch(eon, cases0.concat(cases1), def));
+		}),
+		ParserM.dO({
+			varP;
+			vars <= plussep(ParserM.dO({
+				n <= identP;
+				t <= maybe(ParserM.dO({ colonP; typeP; }));
+				v <= maybe(ParserM.dO({ assignP; exprP; }));
+				ret({name:n,type:t,expr:v});
+			}),commaP);
+			ret(eVars(vars));
 		})
 	].ors().or(ParserM.dO({ x <= constantP; ret(eConst(x)); }));
 
