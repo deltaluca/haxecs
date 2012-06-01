@@ -20,7 +20,7 @@ class HaxeParser {
 
 	static var intR = ~/([0-9]+)|(0x[0-9a-fA-F]+)/;
 	static var floatR = ~/[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?/;
-	static var stringR = ~/("((\\")|[^"])*")|('((\\')|[^'])*')/;
+	public static var stringR = ~/("((\\")|[^"])*")|('((\\')|[^'])*')/;
 	
 	//whitespace
 	static var spaceP = " ".identifier();
@@ -31,7 +31,7 @@ class HaxeParser {
 	static var cpp_commentR = ~/\/\/.*/;
 	static var c_commentR = ~/\*[^*]*\*+(?:[^*\/][^*]*\*+)*\//;
 
-	static var spacingP = [
+	public static var spacingP = [
 		spaceP.oneMany(),
 		tabP.oneMany(),
 		retP.oneMany(),
@@ -44,7 +44,7 @@ class HaxeParser {
 	//-----------------------------------------------------------------------------
 
 	//produce a left-recursive application of possible infix binary operators to 'p' parsers
-	static function chainl1<T>(p:Void->Parser<String,T>, op:Void->Parser<String,T->T->T>):Void->Parser<String,T> {
+	public static function chainl1<T>(p:Void->Parser<String,T>, op:Void->Parser<String,T->T->T>):Void->Parser<String,T> {
 		return chainl2(p,op,p);
 	}
 
@@ -76,7 +76,7 @@ class HaxeParser {
 	}
 
 	//either success or null
-	static function maybe<T>(p:Void->Parser<String,T>):Void->Parser<String,Null<T>> {
+	public static function maybe<T>(p:Void->Parser<String,T>):Void->Parser<String,Null<T>> {
 		return ParserM.dO({
 			x <= p.option();
 			ret(switch(x) {
@@ -100,8 +100,8 @@ class HaxeParser {
 	//-----------------------------------------------------------------------------
 	//operators
 
-	static var lParP     = withSpacing("(".identifier());
-	static var rParP     = withSpacing(")".identifier());
+	public static var lParP     = withSpacing("(".identifier());
+	public static var rParP     = withSpacing(")".identifier());
 	static var lBraceP   = withSpacing("{".identifier());
 	static var rBraceP   = withSpacing("}".identifier());
 	static var lSquareP  = withSpacing("[".identifier());
@@ -133,9 +133,9 @@ class HaxeParser {
 	static var gtP       = withSpacing(">".identifier());
 	static var ltP       = withSpacing("<".identifier());
 
-	static var notP      = withSpacing("!".identifier());
-	static var andP      = withSpacing("&&".identifier());
-	static var orP       = withSpacing("||".identifier());
+	public static var notP      = withSpacing("!".identifier());
+	public static var andP      = withSpacing("&&".identifier());
+	public static var orP       = withSpacing("||".identifier());
 
 	static var incP      = withSpacing("++".identifier());
 	static var decP      = withSpacing("--".identifier());
@@ -189,7 +189,7 @@ class HaxeParser {
 
 	//-----------------------------------------------------------------------------
 	
-	static var identP = withSpacing(identR.regexParser());
+	public static var identP = withSpacing(identR.regexParser());
 	
 	static var constantP = [
 		ParserM.dO({ x <= withSpacing(floatR.regexParser()); ret(cFloat(x)); }),
@@ -433,6 +433,9 @@ class HaxeParser {
 	static var packP = ParserM.dO({
 		packageP; n <= identP.repsep(dotP).then(function (xs) return xs.join(".")); semicolP; ret(n);
 	}).or("".success());
+	static var impP = ParserM.dO({
+		importP; n <= identP.repsep(dotP).then(function (xs) return xs.join(".")); semicolP; ret(n);
+	});
 
 	static var propertyP = ParserM.dO({
 		as <= accessorsP; varP; n <= identP;
@@ -474,11 +477,13 @@ class HaxeParser {
 		pack <= packP;
 		classes <= [].success();
 		typedefs <= [].success();
+		imports <= [].success();
 		[
 			hclassP.then(function (c) classes.push(c)),
-			tdefP.then(function (t) typedefs.push(t))
+			tdefP.then(function (t) typedefs.push(t)),
+			impP.then(function (i) imports.push(i))
 		].ors().many();
-		ret({pname:pack,classes:classes,typedefs:typedefs});
+		ret({pname:pack,classes:classes,typedefs:typedefs,imports:imports});
 	});
 
 	//-----------------------------------------------------------------------------

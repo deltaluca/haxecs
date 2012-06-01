@@ -57,6 +57,7 @@ typedef HClass = {
 };
 typedef File = {
 	pname:String,
+	imports:Array<String>,
 	classes:Array<HClass>,
 	typedefs:Array<Typedef>
 };
