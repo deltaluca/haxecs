@@ -33,8 +33,11 @@ class Main {
 		for(c in cmds) defs.set(c,true);
 
 		try {
+			trx("~~~~~~~~~~~~~~~~~");
 			var y = HaxeStrip.strip(x,defs);
+			trx("~~~~~~~~~~~~~~~~~");
 			var z = HaxeParser.parse(y);
+			trx("~~~~~~~~~~~~~~~~~");
 			trx(Std.string(z));
 		}catch(e:Dynamic) trace(Std.string(e));
 	}

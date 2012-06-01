@@ -18,8 +18,8 @@ import AST;
 class HaxeParser {
 	static var identR = ~/[a-zA-Z_][a-zA-Z_0-9]*/;
 
-	static var intR = ~/([0-9]+)|(0x[0-9a-fA-F]+)/;
-	static var floatR = ~/([0-9]*\.[0-9]+([eE][-+]?[0-9]+)?)|([0-9]+[eE][-+]?[0-9]+)/;
+	static var intR = ~/(0x[0-9a-fA-F]+)|[0-9]+/;
+	static var floatR = ~/([0-9]+\.[0-9]+([eE][-+]?[0-9]+)?)|([0-9]+[eE][-+]?[0-9]+)/;
 	public static var stringR = ~/("((\\")|[^"])*")|('((\\')|[^'])*')/;
 	
 	//whitespace
@@ -31,15 +31,19 @@ class HaxeParser {
 	static var cpp_commentR = ~/\/\/.*/;
 	static var c_commentR = ~/\*[^*]*\*+(?:[^*\/][^*]*\*+)*\//;
 
+	//metadata (ignored)
+	static var metaR = ~/@:?[a-zA-Z_][a-zA-Z_0-9]*(\([^\)]*\))?/;
+
 	public static var spacingP = [
 		spaceP.oneMany(),
 		tabP.oneMany(),
 		retP.oneMany(),
 		cpp_commentR.regexParser().oneMany(),
-		c_commentR.regexParser().oneMany()
+		c_commentR.regexParser().oneMany(),
+		metaR.regexParser().oneMany()
 	].ors().many();
 
-	static function withSpacing<T>(p:Void->Parser<String,T>) return spacingP._and(p)
+	static function withSpacing<T>(p:Void->Parser<String,T>) return spacingP._and(p).memo()
 
 	//-----------------------------------------------------------------------------
 
@@ -54,7 +58,7 @@ class HaxeParser {
 			f <= op;
 			y <= q;
 			rest(f(x,y));
-		}).or(x.success());
+		}).or(x.success()).memo();
 
 		return ParserM.dO({ x <= p; rest(x); });
 	}
@@ -66,11 +70,12 @@ class HaxeParser {
 			f <= op;
 			y <= scan;
 			ret(f(x,y));
-		}).or(x.success());
+		}).or(x.success()).memo();
+
 		scan = ParserM.dO({
 			x <= p;
 			rest(x);
-		});
+		}).memo();
 
 		return scan;
 	}
@@ -83,7 +88,7 @@ class HaxeParser {
 				case Some(y): y;
 				default: null;
 			});
-		});
+		}).memo();
 	}
 
 	//produces parser ~/p+/ where p's seperated by sep.
@@ -92,7 +97,7 @@ class HaxeParser {
 			sep;
 			y <= p;
 			rest(x.concat([y]));
-		}).or(x.success());
+		}).or(x.success()).memo();
 	
 		return ParserM.dO({ x <= p; rest([x]); });
 	}
@@ -196,7 +201,7 @@ class HaxeParser {
 		ParserM.dO({ x <= withSpacing(intR.regexParser()); ret(cInt(x)); }),
 		ParserM.dO({ x <= withSpacing(stringR.regexParser()); ret(cString(x)); }),
 		ParserM.dO({ x <= identP; ret(cIdent(x)); })
-	].ors();
+	].ors().memo();
 
 	// ident<typeP...> [.ident<typeP...>] *
 	static var typeP = chainl1(
@@ -209,7 +214,7 @@ class HaxeParser {
 			ret(t + if(params!=null) params else "");
 		}),
 		ParserM.dO({ dotP; ret(function (x,y) return x+"."+y); })
-	);
+	).memo();
 
 	//  ? ident : type = expr
 	static var paramP = ParserM.dO({
@@ -218,7 +223,7 @@ class HaxeParser {
 		type <= maybe(ParserM.dO({ colonP; typeP; }));
 		value <= maybe(ParserM.dO({ assignP; exprP; }));
 		ret({name:name, opt:switch(opt) { case Some(_): true; default: false; }, type:type, value:value});
-	});
+	}).memo();
 
 	// ( params ) : type expr
 	static var funcexprP = ParserM.dO({
@@ -228,7 +233,7 @@ class HaxeParser {
 		ret <= maybe(ParserM.dO({ colonP; typeP; }));
 		e <= exprP;
 		ret({ ret : ret, params : params, expr : e });
-	});	
+	}).memo();	
 
 	//-----------------------------------------------------------------------------
 	
@@ -261,7 +266,7 @@ class HaxeParser {
 	static var expr0aP = [
 		ParserM.dO({ lParP; e <= exprP; rParP; ret(eParenthesis(e)); }),
 		ParserM.dO({ lSquareP; xs <= exprP.repsep(commaP); rSquareP; ret(eArray(xs)); }),
-		ParserM.dO({ lBraceP; xs <= (exprP.and_(semicolP)).many(); rBraceP; ret(eBlock(xs)); }),
+		ParserM.dO({ lBraceP; xs <= (exprP.and_(semicolP.option())).many(); rBraceP; ret(eBlock(xs)); }),
 		ParserM.dO({
 			whileP; lParP; cond <= exprP; rParP;
 			e <= exprP;
@@ -283,7 +288,7 @@ class HaxeParser {
 		ParserM.dO({
 			ifP; lParP; cond <= exprP; rParP;
 			eif <= exprP;
-			eelse <= maybe(ParserM.dO({ elseP; exprP; }));
+			eelse <= maybe(ParserM.dO({ semicolP.option(); elseP; exprP; }));
 			ret(eIf(cond,eif,eelse));
 		}),
 		ParserM.dO({ e <= identP; inP; f <= exprP; ret(eIn(e,f)); }),
@@ -322,24 +327,34 @@ class HaxeParser {
 			}),commaP);
 			ret(eVars(vars));
 		})
-	].ors().or(ParserM.dO({ x <= constantP; ret(eConst(x)); }));
+	].ors().or(ParserM.dO({ x <= constantP; ret(eConst(x)); })).memo();
 
 	// expr0a [. ident]*
 	static var expr0bP = chainl2(
 		expr0aP,
 		ParserM.dO({ dotP; ret(function (x,y) return eField(x,y)); }),
 		identP
-	);
+	).memo();
 
-	// expr0b [( expr.. )]*
-	static var expr0P = chainl2(
+	// expr0b [[ expr ]]*
+	static var expr0cP = chainl2(
 		expr0bP,
+		ParserM.dO({
+			lSquareP; e <= exprP; rSquareP;
+			ret(function (x,_) return eArrayAccess(x,e));
+		}),
+		({ var e:Expr = null; e.success(); })
+	).memo();
+
+	// expr0c [( expr.. )]*
+	static var expr0P = chainl2(
+		expr0cP,
 		ParserM.dO({
 			lParP; xs <= exprP.repsep(commaP); rParP;
 			ret(function (x,_) return eCall(x,xs));
 		}),
 		({ var e:Expr = null; e.success(); })
-	);
+	).memo();
 
 	/*
 		++ expr0 (r.assoc)
@@ -355,7 +370,7 @@ class HaxeParser {
 		ParserM.dO({ x <= expr0P; decP; ret(eUnop(uDec, fPost, x)); }),
 		ParserM.dO({ subP; x <= expr0P; ret(eUnop(uNegBits, fPre, x)); }),
 		ParserM.dO({ notP; x <= expr0P; ret(eUnop(uNeg, fPre, x)); })
-	].ors().or(expr0P);
+	].ors().or(expr0P).memo();
 
 	// produce chaining combinator
 	static function chainOpP<T>(p:Void->Parser<String,T>,op:Binop):Void->Parser<String,Expr->Expr->Expr> {
@@ -374,21 +389,21 @@ class HaxeParser {
 		chainOpP(lshiftP,opShl),
 		chainOpP(urshiftP,opUShr),
 		chainOpP(rshiftP,opShr)
-	].ors());
+	].ors()).memo();
 
 	// chain (|,&,^) expr5P (l.assoc)
 	static var expr6P = chainl1(expr5P, [
 		chainOpP(binorP,opOr),
 		chainOpP(binandP,opAnd),
 		chainOpP(binxorP,opXor)
-	].ors());
+	].ors()).memo();
 
 	// chain (==,!=,>,>=,<,<=) expr6P (l.assoc)
 	static var expr7P = chainl1(expr6P, [
 		chainOpP(eqP,opEq), chainOpP(neqP,opNeq),
 		chainOpP(leqP,opLeq), chainOpP(geqP,opGeq),
 		chainOpP(ltP,opLt), chainOpP(gtP,opGt)
-	].ors());
+	].ors()).memo();
 
 	// chain (...) expr7P (l.assoc)
 	static var expr8P = chainl1(expr7P, chainOpP(dotsP,opInterval));
@@ -408,7 +423,7 @@ class HaxeParser {
 		}).or(x.success());
 
 		return ParserM.dO({ x <= p; rest(x); });
-	}(exprAP);
+	}(exprAP).memo();
 
 	// chain (=,+=,-=,/=,*=,%=,<<=,>>=,>>>=,|=,&=,^=) exprBP (r.assoc)
 	static var exprCP = chainr1(exprBP, [
@@ -418,9 +433,9 @@ class HaxeParser {
 		chainOpP(lshifteqP,opAssignOp(opShl)), 
 		chainOpP(urshifteqP,opAssignOp(opUShr)), chainOpP(rshifteqP,opAssignOp(opShr)),
 		chainOpP(oreqP,opAssignOp(opOr)), chainOpP(andeqP,opAssignOp(opAnd)), chainOpP(xoreqP,opAssignOp(opXor))
-	].ors());
+	].ors()).memo();
 
-	static var exprP = exprCP;
+	static var exprP = exprCP.memo();
 
 	//-----------------------------------------------------------------------------
 
@@ -442,19 +457,19 @@ class HaxeParser {
 		lParP; g <= identP; commaP; s <= identP; rParP;
 		colonP; t <= typeP; semicolP;
 		ret({name:n,type:t,getter:g,setter:g,accessors:as});
-	});
+	}).memo();
 	static var memberP = ParserM.dO({
 		as <= accessorsP; varP; n <= identP;
 		t <= maybe(ParserM.dO({ colonP; typeP; }));
 		v <= maybe(ParserM.dO({ assignP; exprP; }));
 		semicolP;
 		ret({name:n,accessors:as,type:t,value:v});
-	});
+	}).memo();
 	static var methodP = ParserM.dO({
 		as <= accessorsP; functionP; n <= identP;
 		f <= funcexprP;
 		ret({name:n,accessors:as,f:f});
-	});
+	}).memo();
 
 	static var hclassP = ParserM.dO({
 		classP; n <= identP;
@@ -471,7 +486,7 @@ class HaxeParser {
 		rBraceP;
 		semicolP.option();
 		ret({name:n,sclass:ext,members:membs,properties:props,methods:meths});
-	});
+	}).memo();
 
 	static var fileP = ParserM.dO({
 		pack <= packP;
@@ -484,7 +499,7 @@ class HaxeParser {
 			impP.then(function (i) imports.push(i))
 		].ors().many();
 		ret({pname:pack,classes:classes,typedefs:typedefs,imports:imports});
-	});
+	}).memo();
 
 	//-----------------------------------------------------------------------------
 	

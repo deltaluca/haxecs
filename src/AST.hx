@@ -65,6 +65,7 @@ typedef File = {
 enum Expr {
 	eConst(c:Constant);
 	eArray(xs:Array<Expr>);
+	eArrayAccess(a:Expr,b:Expr);
 	eBlock(xs:Array<Expr>);
 	eUnop(op:Unop, flag:UnopFlag, x:Expr);
 	eBinop(op:Binop, x:Expr, y:Expr);
