@@ -1,0 +1,130 @@
+//ignore whitespace and comments
+//NULL -10 : ~/[ \t\n\r]/~
+//NULL -10 : ~/\/\/.*/~
+//NULL -10 : ~/\*[^*]*\*+(?:[^*\/][^*]*\*+)*\//~
+
+%{
+
+	import AST;
+
+	enum Operator {
+		oAdd; oMul; oDiv; oSub; oMod;
+		oAssign; oEq; oNeq; oGt; oLt; oGeq; oLeq;
+		oOr; oAnd; oXor; oBoolAnd; oBoolOr; oShl; oShr; oUShr;
+		oAssignOp(o:Binop);
+		oInterval;
+
+		oNot; oNegBits; oInc; oDec;
+	}
+	
+	enum Keyword {
+		ktypedef; kclass; kextends; kvar; kfunction; kimport;
+		kfor; kdo; kwhile; kin; kswitch; kpackage; kelse; kcase;
+		kbreak; kcontinue; ktry; kcatch; kcast; kreturn; knew;
+		kdefault; kif; kthrow;
+	}
+	
+	enum Token {
+		tConstant(c:Constant);
+		tAccess(a:Access);
+		tOperator(o:Operator);
+		tKeyword(k:Keyword);
+
+		tLPar; tRPar;
+		tLSquare; tRSquare;
+		tLBrace; tRBrace;
+		tSemicol; tColon; tQmark; tComma; tDot;
+	}
+
+%}
+
+// Symbols
+~/\(/~ := %{ tLPar;    %}
+~/\)/~ := %{ tRPar;    %}
+~/\[/~ := %{ tLSquare; %}
+~/\]/~ := %{ tRSquare; %}
+~/\{/~ := %{ tLBrace;  %}
+~/\}/~ := %{ tRBrace;  %}
+~/;/~  := %{ tSemicol; %}
+~/:/~  := %{ tColon;   %}
+~/\?/~ := %{ tQmark;   %}
+~/,/~  := %{ tComma;   %}
+~/\./~ := %{ tDot;     %}
+
+// tConstant(#)
+-1 : ~/([0-9]+\.[0-9]+([eE][-+]?[0-9]+)?)|([0-9]+[eE][-+]?[0-9]+)/~  := %{ tConstant(cFloat (%)); %}
+-2 : ~/(0x[0-9a-fA-F]+)|([0-9]+)/~                                     := %{ tConstant(cInt   (%)); %}
+-3 : ~/("((\\")|[^"])*")|('((\\')|[^'])*')/~                         := %{ tConstant(cString(%)); %}
+-4 : ~/[a-zA-Z_][a-zA-Z_0-9]*/~                                      := %{ tConstant(cIdent (%)); %}
+
+// tAccess(#)
+~/public/~   := %{ tAccess(aPublic  ); %}
+~/private/~  := %{ tAccess(aPrivate ); %}
+~/static/~   := %{ tAccess(aStatic  ); %}
+~/override/~ := %{ tAccess(aOverride); %}
+~/inline/~   := %{ tAccess(aInline);   %}
+
+// tKeyword(#)
+~/typedef/~   := %{ tKeyword(ktypedef ); %}
+~/class/~     := %{ tKeyword(kclass   ); %}
+~/extends/~   := %{ tKeyword(kextends ); %}
+~/var/~       := %{ tKeyword(kvar     ); %}
+~/function/~  := %{ tKeyword(kfunction); %}
+~/import/~    := %{ tKeyword(kimport  ); %}
+~/for/~       := %{ tKeyword(kfor     ); %}
+~/do/~        := %{ tKeyword(kdo      ); %}
+~/while/~     := %{ tKeyword(kwhile   ); %}
+~/in/~        := %{ tKeyword(kin      ); %}
+~/switch/~    := %{ tKeyword(kswitch  ); %}
+~/package/~   := %{ tKeyword(kpackage ); %}
+~/else/~      := %{ tKeyword(kelse    ); %}
+~/case/~      := %{ tKeyword(kcase    ); %}
+~/break/~     := %{ tKeyword(kbreak   ); %}
+~/continue/~  := %{ tKeyword(kcontinue); %}
+~/try/~       := %{ tKeyword(ktry     ); %}
+~/catch/~     := %{ tKeyword(kcatch   ); %}
+~/cast/~      := %{ tKeyword(kcast    ); %}
+~/return/~    := %{ tKeyword(kreturn  ); %}
+~/new/~       := %{ tKeyword(knew     ); %}
+~/default/~   := %{ tKeyword(kdefault ); %}
+~/if/~        := %{ tKeyword(kif      ); %}
+~/throw/~     := %{ tKeyword(kthrow   ); %}
+
+// tOperator(#)
+~/\+/~   := %{ tOperator(oAdd    ); %}
+~/\-/~   := %{ tOperator(oSub    ); %}
+~/\*/~   := %{ tOperator(oMul    ); %}
+~/\//~   := %{ tOperator(oDiv    ); %}
+~/%/~    := %{ tOperator(oMod    ); %}
+~/=/~    := %{ tOperator(oAssign ); %}
+~/==/~   := %{ tOperator(oEq     ); %}
+~/!=/~   := %{ tOperator(oNeq    ); %}
+~/>/~    := %{ tOperator(oGt     ); %}
+~/</~    := %{ tOperator(oLt     ); %}
+~/>=/~   := %{ tOperator(oGeq    ); %}
+~/<=/~   := %{ tOperator(oLeq    ); %}
+~/\|/~   := %{ tOperator(oOr     ); %}
+~/&/~    := %{ tOperator(oAnd    ); %}
+~/\^/~   := %{ tOperator(oXor    ); %}
+~/~/~    := %{ tOperator(oNegBits); %}
+~/&&/~   := %{ tOperator(oBoolAnd); %}
+~/\|\|/~ := %{ tOperator(oBoolOr ); %}
+~/<</~   := %{ tOperator(oShl    ); %}
+~/>>/~   := %{ tOperator(oShr    ); %}
+~/>>>/~  := %{ tOperator(oUShr   ); %}
+~/\.\.\./~:=%{ tOperator(oInterval);%}
+~/!/~    := %{ tOperator(oNot    ); %}
+~/\+\+/~ := %{ tOperator(oInc    ); %}
+~/\-\-/~ := %{ tOperator(oDec    ); %}
+
+~/\+=/~  := %{ tOperator(oAssignOp(opAdd    )); %}
+~/\-=/~  := %{ tOperator(oAssignOp(opSub    )); %}
+~/\*=/~  := %{ tOperator(oAssignOp(opMul    )); %}
+~/\/=/~  := %{ tOperator(oAssignOp(opDiv    )); %}
+~/%=/~   := %{ tOperator(oAssignOp(opMod    )); %}
+~/\|=/~  := %{ tOperator(oAssignOp(opOr     )); %}
+~/&=/~   := %{ tOperator(oAssignOp(opAnd    )); %}
+~/\^=/~  := %{ tOperator(oAssignOp(opXor    )); %}
+~/<<=/~  := %{ tOperator(oAssignOp(opShl    )); %}
+~/>>=/~  := %{ tOperator(oAssignOp(opShr    )); %}
+~/>>>=/~ := %{ tOperator(oAssignOp(opUShr   )); %}

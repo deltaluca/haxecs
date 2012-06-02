@@ -210,7 +210,7 @@ class HaxeParser {
 			params <= maybe(ParserM.dO({
 				ltP; ts <= plussep(typeP,commaP); gtP;
 				ret("<"+ts.join(",")+">");
-			}));
+			})).commit();
 			ret(t + if(params!=null) params else "");
 		}),
 		ParserM.dO({ dotP; ret(function (x,y) return x+"."+y); })
@@ -300,7 +300,7 @@ class HaxeParser {
 				catchP; lParP; n <= identP; colonP; t <= typeP; rParP;
 				e <= exprP;
 				ret({type:t,name:n,expr:e});
-			}).many();
+			}).many().commit();
 			ret(eTry(e,catches));
 		}),
 		ParserM.dO({
@@ -324,7 +324,7 @@ class HaxeParser {
 				t <= maybe(ParserM.dO({ colonP; typeP; }));
 				v <= maybe(ParserM.dO({ assignP; exprP; }));
 				ret({name:n,type:t,expr:v});
-			}),commaP);
+			}),commaP).commit();
 			ret(eVars(vars));
 		})
 	].ors().or(ParserM.dO({ x <= constantP; ret(eConst(x)); })).memo();
@@ -482,7 +482,7 @@ class HaxeParser {
 				propertyP.then(function(p) props.push(p)),
 				memberP.then(function (p) membs.push(p)),
 				methodP.then(function (p) meths.push(p))
-			].ors().many();
+			].ors().many().commit();
 		rBraceP;
 		semicolP.option();
 		ret({name:n,sclass:ext,members:membs,properties:props,methods:meths});
@@ -497,7 +497,7 @@ class HaxeParser {
 			hclassP.then(function (c) classes.push(c)),
 			tdefP.then(function (t) typedefs.push(t)),
 			impP.then(function (i) imports.push(i))
-		].ors().many();
+		].ors().many().commit();
 		ret({pname:pack,classes:classes,typedefs:typedefs,imports:imports});
 	}).memo();
 

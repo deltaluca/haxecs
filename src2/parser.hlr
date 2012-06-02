@@ -1,0 +1,285 @@
+%TOKEN IDENT LITERAL
+%TOKEN ACCESS
+
+%TOKEN ADD MUL DIV SUB MOD
+%TOKEN ASSIGN EQ NEQ GT LT GEQ LEQ
+%TOKEN OR AND XOR BOOLAND BOOLOR SHL SHR USHR
+%TOKEN ASSIGNOP
+%TOKEN INTERVAL
+%TOKEN NOT NEGBITS INC DEC
+
+%TOKEN TYPEDEF CLASS EXTENDS VAR FUNCTION IMPORT
+%TOKEN FOR DO WHILE IN SWITCH PACKAGE ELSE CASE
+%TOKEN BREAK CONTINUE TRY CATCH CAST RETURN NEW
+%TOKEN DEFAULT IF THROW
+
+%TOKEN LPAR RPAR LSQ RSQ LBR RBR
+%TOKEN SEMI COLON QMARK COMMA DOT
+
+%{
+
+	import Lexer; //for tokens
+	import AST;
+
+	class TU {
+		//need [0,#tokens] mapping from real tokens, to token declarations
+		static public function index(t:Token) {
+			var ind = Type.enumIndex(t);
+			if(ind==0) { //constant
+				var pars = Type.enumParameters(t);
+				return Type.enumIndex(pars[0]) == 3 ? 0 : 1;
+			}else if(ind==1) return 2;
+			else if(ind==2) { //operator
+				var pars = Type.enumParameters(t);
+				return 3 + Type.enumIndex(pars[0]);
+			}else if(ind==3) { //keyword
+				var pars = Type.enumParameters(t);
+				return 29 + Type.enumIndex(pars[0]);
+			}else { //symbol
+				return 53 + ind - 4;
+			}
+		}
+
+		static public inline function ident(t:Token) {
+			return switch(t) {
+				case tConstant(c):
+					switch(c) {
+						case cIdent(x): x;
+						default: "";
+					}
+				default: "";
+			};
+		}
+		static public inline function literal(t:Token) {
+			return switch(t) {
+				case tConstant(c): c;
+				default: null;
+			}	
+		}
+		static public inline function op(t:Token) {
+			return switch(t) {
+				case tOperator(c):
+					switch(c) {
+						case oAssignOp(o): opAssignOp(o);
+						default: Type.createEnumIndex(Binop, Type.enumIndex(c)); 
+					}
+				default: null;
+			}
+		}
+	}
+
+%}
+
+%entry expr
+
+// ident < types... > [ . ident < types.. > ]*
+%type %{ String %}
+	: typepart
+	| type DOT typepart %{ %0+"."+%2; %}
+;	%typelist %{ Array<String> %}
+		: type                %{ [%0]; %}
+		| typelist COMMA type %{ %0.push(%2); %0; %}
+;	%typepart %{ String %}
+		: IDENT                %{ TU.ident(%0); %}
+		| IDENT LT typelist GT %{ TU.ident(%0)+"<"+%2.join(",")+">"; %}
+;
+
+// ?? ident [: type]? [= expr]?
+%param %{ Param %}
+	:       IDENT restparam %{ {name:TU.ident(%0), opt:false, type:%1.type, value:%1.value}; %}
+	| QMARK IDENT restparam %{ {name:TU.ident(%1), opt:true,  type:%2.type, value:%2.value}; %}
+;	%restparam %{ {type:String, value:Expr} %}
+		: COLON type rest2param %{ {type:%1, value:%2}; %}
+		|            rest2param %{ {type:null, value:%0}; %}
+;	%rest2param %{ Expr %} : %{ null; %} | ASSIGN expr %{ %1; %}
+;
+// param, param ....
+%maybeparamlist %{ Array<Param> %}
+	: %{ []; %}
+	| maybeparamlist param %{ %0.push(%1); %0; %}
+;
+
+%funcexpr %{ FuncExpr %}
+	: LPAR maybeparamlist RPAR functype expr %{ {params:%1, ret:%3, expr:%4}; %}
+;	%functype %{ String %} : %{ null; %} | COLON type %{ %1; %}
+;
+
+//--------------------------------------------------------
+
+/*
+	( expr )
+	[ expr, expr ... ]
+	{ expr;? expr;? ... ]
+	while (expr) expr
+	do expr while (expr)
+	for (expr) expr
+	return ?expr
+	if(expr) expr [else expr]?
+	ident in expr
+	throw expr
+	new type (expr...?)
+	function funcexpr
+	try expr [ catch (ident.type) expr ]*
+	switch (expr) { [case constant: expr;]* [default: expr;]? }
+	constant
+	break
+	continue
+*/
+%expr0a %{ Expr %}
+	: LPAR expr RPAR %{ eParenthesis(%1); %}
+	| LSQ exprlist RSQ %{ eArray(%1); %}
+	| LBR exprcols RBR %{ eBlock(%1); %}
+	| WHILE LPAR expr RPAR expr %{ eWhile(%2,%4,true); %}
+	| DO expr WHILE LPAR expr RPAR %{ eWhile(%4,%1,false); %}
+	| FOR LPAR expr RPAR expr %{ eFor(%2,%4); %}
+	| RETURN %{ eReturn(null); %}
+	| RETURN expr %{ eReturn(%1); %}
+	| IF LPAR expr RPAR expr elseexpr %{ eIf(%2,%4,%5); %}
+	| IDENT IN expr %{ eIn(TU.ident(%0),%2); %}
+	| THROW expr %{ eThrow(%1); %}
+	| NEW type LPAR maybeexprlist RPAR %{ eNew(%1,%3); %}
+	| FUNCTION funcexpr %{ eFunction(%1); %}
+	| TRY expr catches %{ eTry(%1,%2); %}
+	| SWITCH LPAR expr RPAR LBR casesdef RBR %{ eSwitch(%2,%5.cases,%5.defaultf); %}
+	| LITERAL   %{ eConst(TU.literal(%0)); %}
+	| IDENT     %{ eConst(TU.literal(%0)); %}
+	| BREAK     %{ eBreak; %}
+	| CONTINUE  %{ eContinue; %}
+;	%exprcols %{ Array<Expr> %}
+		: expr %{ [%0]; %}
+		| expr SEMI %{ [%0]; %}
+		| exprcols expr %{ %0.push(%1); %0; %}
+		| exprcols expr SEMI %{ %0.push(%1); %0; %}
+;	%elseexpr %{ Expr %} : | ELSE expr %{ %1; %}
+;	%catches %{ Array<{type:String,name:String,expr:Expr}> %}
+		: catch %{ [%0]; %}
+		| catches catch %{ %0.push(%1); %0; %}
+;	%catch %{ {type:String,name:String,expr:Expr} %}
+		: CATCH LPAR IDENT COLON type RPAR expr %{ {type:%4, name:TU.ident(%2), expr:%6}; %}
+;	%casesdef %{ {cases:Array<{val:Expr,expr:Expr}>, defaultf:Expr} %}
+		: default %{ {cases:null,defaultf:%0}; %}
+		| cases   %{ {cases:%0,defaultf:null}; %}
+		| default cases %{ {cases:%1,defaultf:%0}; %}
+		| cases casesdef %{ {cases:%0.concat(%1.cases),defaultf:%1.defaultf}; %}
+;	%default %{ Expr %} : DEFAULT COLON expr SEMI %{ %2; %} | %{ null; %}
+;	%cases %{ Array<{val:Expr,expr:Expr}> %}
+		: CASE expr COLON expr SEMI %{ [{val:%1,expr:%3}]; %}
+		| cases CASE expr COLON expr SEMI %{ %0.push({val:%2,expr:%4}); %0; %}
+;
+
+// expr0a [. ident] *
+%expr0b %{ Expr %}
+	: expr0a
+	| expr0b DOT IDENT %{ eField(%0,TU.ident(%2)); %}
+;
+
+// expr0b [( expr.. )]*
+%expr0c %{ Expr %}
+	: expr0b
+	| expr0c LPAR exprlist RPAR %{ eCall(%0,%2); %}
+;
+
+// ++ expr0c (r.assoc)
+// -- expr0c (r.assoc)
+// -  expr0c (r.assoc)
+// !  expr0c (r.assoc)
+// expr0c
+%expr1 %{ Expr %}
+	: expr0c
+	| INC expr1 %{ eUnop(uInc, fPre, %1); %}
+	| DEC expr1 %{ eUnop(uDec, fPre, %1); %}
+	| expr1 INC %{ eUnop(uInc, fPost, %0); %}
+	| expr1 DEC %{ eUnop(uDec, fPost, %0); %}
+	| NOT expr1 %{ eUnop(uNot, fPre, %1); %}
+	| SUB expr1 %{ eUnop(uNeg, fPre, %1); %}
+	| NEGBITS expr1 %{ eUnop(uNegBits, fPre, %1); %}
+;
+
+// chain % expr1 (l.assoc)
+%expr2 %{ Expr %}
+	: expr1
+	| expr2 MOD expr1 %{ eBinop(opMod,%0,%2); %}
+;
+
+// chain *,/ expr2 (l.assoc)
+%expr3 %{ Expr %}
+	: expr2
+	| expr3 MUL expr2 %{ eBinop(opMul,%0,%2); %}
+	| expr3 DIV expr2 %{ eBinop(opDiv,%0,%2); %}
+;
+
+// chain +,- expr3 (l.assoc)
+%expr4 %{ Expr %}
+	: expr3
+	| expr4 ADD expr3 %{ eBinop(opAdd,%0,%2); %}
+	| expr4 SUB expr3 %{ eBinop(opSub,%0,%2); %}
+;
+
+// chain >>,<<,>>> expr4 (l.assoc)
+%expr5 %{ Expr %}
+	: expr4
+	| expr5 SHL  expr4 %{ eBinop(opShl, %0,%2); %}
+	| expr5 SHR  expr4 %{ eBinop(opShr, %0,%2); %}
+	| expr5 USHR expr4 %{ eBinop(opUShr,%0,%2); %}
+;
+
+// chain |,&,^ expr5 (l.assoc)
+%expr6 %{ Expr %}
+	: expr5
+	| expr6 OR  expr5 %{ eBinop(opOr, %0,%2); %}
+	| expr6 AND expr5 %{ eBinop(opAnd,%0,%2); %}
+	| expr6 XOR expr5 %{ eBinop(opXor,%0,%2); %}
+;
+
+// chain ==,!=,>,>=,<,<= expr6 (l.assoc)
+%expr7 %{ Expr %}
+	: expr6
+	| expr7  EQ expr6 %{ eBinop(opEq, %0,%2); %}
+	| expr7 NEQ expr6 %{ eBinop(opNeq,%0,%2); %}
+	| expr7  GT expr6 %{ eBinop(opGt, %0,%2); %}
+	| expr7  LT expr6 %{ eBinop(opLt, %0,%2); %}
+	| expr7 GEQ expr6 %{ eBinop(opGeq,%0,%2); %}
+	| expr7 LEQ expr6 %{ eBinop(opLeq,%0,%2); %}
+;
+
+// chain ... expr7 (l.assoc)
+%expr8 %{ Expr %}
+	: expr7
+	| expr8 INTERVAL expr7 %{ eBinop(opInterval,%0,%2); %}
+;
+
+// chain %% expr8 (l.assoc)
+%expr9 %{ Expr %}
+	: expr8
+	| expr9 BOOLAND expr8 %{ eBinop(opBoolAnd,%0,%2); %}
+;
+
+//chain || expr9 (l.assoc)
+%exprA %{ Expr %}
+	: expr9
+	| exprA BOOLOR  expr9 %{ eBinop(opBoolOr, %0,%2); %}
+;
+
+//chain (?:) exprA (l.assoc)
+%exprB %{ Expr %}
+	: exprA
+	| exprB QMARK exprB COLON exprB %{ eTernary(%0,%2,%4); %}
+;
+
+//chain assignments exprB (r.assoc)
+%exprC %{ Expr %}
+	: exprB
+	| exprB ASSIGN   exprC %{ eBinop(opAssign, %0,%2); %}
+	| exprB ASSIGNOP exprC %{ eBinop(TU.op(%1),%0,%2); %}
+;
+
+%expr %{ Expr %} : exprC ;
+
+//--------------------------------------------------------
+
+// expr [, expr]*
+%exprlist %{ Array<Expr> %}
+	: expr                %{ [%0]; %}
+	| exprlist COMMA expr %{ %0.push(%2); %0; %}
+;
+%maybeexprlist %{ Array<Expr> %} : %{ []; %} | exprlist;
