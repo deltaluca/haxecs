@@ -1,2 +1,2 @@
 all:
-	ghc main.hs -o main
+	ghc main.hs parser.hs -o main
