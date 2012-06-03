@@ -3,7 +3,7 @@ module Parser
         -- * AST data types
         Pre, PreExpr,
         Type,Ident,Package,
-        Constant,Binop,Unop,UnopFlag,
+        Constant,Binop,UnOp,UnOpFlag,
         Access,Expr,
         Catch,Case,VarExpr,FuncExpr,Param, 
         ClassTrait,Import,FileTrait,File,
@@ -14,13 +14,20 @@ module Parser
     ) where
 
 import System.Environment
-import Text.Parsec hiding (string)
+import Text.Parsec hiding (string,chainl1,chainr1)
 import qualified Text.Parsec.Token as P
 import Text.Parsec.Language
 import Text.Parsec.Expr
 import Control.Monad.State hiding (join)
 
 ----------------------------------------------------------------------------------------------
+
+operators = ["+","-","*","/","%",
+             "|","&","^","<<",">>",">>>",
+             "||","&&",
+             "==","!=",">","<",">=","<=",
+             "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
+             "!","~","++","--","?",":","..."]
 
 langDef :: LanguageDef st
 langDef = emptyDef {
@@ -36,12 +43,7 @@ langDef = emptyDef {
                      "public","private","inline","override","static","do","cast",
                      "switch","case","var","function","class","extends","return",
                      "#if","#elseif","#else","#end"],
-    P.reservedOpNames = ["+","-","*","/","%",
-                       "|","&","^","<<",">>",">>>",
-                       "||","&&",
-                       "==","!=",">","<",">=","<=",
-                       "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
-                       "!","~","++","--","?",":","..."],
+    P.reservedOpNames = operators,
     P.caseSensitive = True
 }
 
@@ -99,8 +101,8 @@ data Binop = OpAdd | OpMul | OpDiv | OpSub | OpMod | OpAssign | OpEq | OpNeq | O
            | OpGeq | OpLeq | OpOr | OpAnd | OpXor | OpBoolAnd | OpBoolOr | OpShl | OpShr
            | OpUShr | OpAssignOp Binop | OpInterval
            deriving (Show)
-data Unop = OpInc | OpDec | OpNot | OpNeg | OpNegBits deriving (Show)
-data UnopFlag = FlagPre | FlagPost deriving (Show)
+data UnOp = OpInc | OpDec | OpNot | OpNeg | OpNegBits deriving (Show)
+data UnOpFlag = FlagPre | FlagPost deriving (Show)
 
 data Access = APublic | APrivate | AStatic | AOverride | AInline
             | APre (Pre [Access])
@@ -110,7 +112,7 @@ data Expr = EConst Constant                     -- literal/ident
           | EArray [Expr]                       -- [Expr*]
           | EArrayAccess Expr Expr              -- Expr[Expr]
           | EBlock [Expr]                       -- {(Expr;?)*}
-          | EUnop Unop UnopFlag Expr            
+          | EUnOp UnOp UnOpFlag Expr            
           | EBinop Binop Expr Expr
           | ETernary Expr Expr Expr             -- Expr ? Expr : Expr
           | EWhile Bool Expr Expr               -- while (Expr) Expr (true) do Expr while(Expr) (false)
@@ -129,7 +131,7 @@ data Expr = EConst Constant                     -- literal/ident
           | EVars [VarExpr]                     -- var VarExpr+
           | EFunction FuncExpr                  -- function FuncExpr
           | ECast Expr (Maybe Type)             -- cast expr or cast(expr,Type)
-          | EPre (Pre Expr)
+          | EPre (Pre [Expr])
           deriving (Show)
 
 type Catch    = (Ident,Type,Expr)                  -- (Ident : Type) Expr
@@ -164,15 +166,19 @@ join sep [] = ""
 join sep (x:[]) = x
 join sep xs = foldl1 (\x y -> x ++ sep ++ y) xs
 
+-- allow things like !!!a which buildExpressionParser does not permit
+prefix  p = Prefix  . chainl1 p $ return       (.)
+postfix p = Postfix . chainl1 p $ return (flip (.))
+
 ----------------------------------------------------------------------------------------------
 
-pre_expr = buildExpressionParser table base_expr <?> "Preprocessor Expression"
+pre_expr = chainl1 and_expr (do { symbol "||"; return PreOr })
     where
-        table = [[Prefix (do { operator "!"; return PreNot })],
-                 [Infix (do { operator "&&"; return PreAnd }) AssocLeft],
-                 [Infix (do { operator "||"; return PreOr }) AssocLeft]]
-
-        base_expr = (parens pre_expr) <|> (fmap PreIdent ident) <?> "Preprocessor base Expression"
+        and_expr = chainl1 not_expr (do { symbol "&&"; return PreAnd })
+        not_expr= try (do { symbol "!"; e <- pre_expr; return $ PreNot e })
+                  <|> base_expr
+                  <?> "Preprocessor expression"
+        base_expr = (parens pre_expr) <|> (fmap PreIdent ident) <?> "Preprocessor base expression"
 
 -- parse instances of 'a' wrapped in pre-processor condition statement
 -- eg: pre ident would parse things like #if 'condition' <<ident>>* #end
@@ -203,21 +209,50 @@ typep = chainl1 (do { t <- ident
 
 ----------------------------------------------------------------------------------------------
 
+chainl1 p op = do { x <- p; rest x}
+    where rest x = (try $ do { f <- op; y <- p; rest (f x y) }) <|> (return x)
+chainr1 p op = scan
+    where scan = do { x <- p; rest x }
+          rest x = (try $ do { f <- op; y <- scan; return (f x y) }) <|> (return x)
+
 -- all expressions
-expr = (chainr1 tur_expr $ foldl1 (<|>) [
-         (do { operator "="; return $ EBinop OpAssign }),
-         op "+="  OpAdd, op "-="  OpSub, op "/="   OpDiv, op "*=" OpMul, op "%=" OpMod,
-         op "<<=" OpShl, op ">>=" OpShr, op ">>>=" OpUShr,
-         op "&="  OpAnd, op "|="  OpOr,  op "^="   OpXor
+expr = (chainr1 tur_expr $ choice [
+         binop "=" OpAssign,
+         eqop "+="  OpAdd, eqop "-="  OpSub, eqop "/="   OpDiv, eqop "*=" OpMul, eqop "%=" OpMod,
+         eqop "<<=" OpShl, eqop ">>=" OpShr, eqop ">>>=" OpUShr,
+         eqop "&="  OpAnd, eqop "|="  OpOr,  eqop "^="   OpXor
        ])
       <?> "expression"
-    where op s x = do { operator s; return $ EBinop (OpAssignOp x) }
+    where
+        binop s x = do { symbol s; return $ EBinop x }
+        eqop s x = do { symbol s; return $ EBinop (OpAssignOp x) }
 
--- expressions up to and including ?: ternary operator
-tur_expr = do { x <- low_expr; rest x } <?> "ternary expression"
-    where rest x = (do { symbol "?"; y <- tur_expr; colon; z <- tur_expr; rest $ ETernary x y z })
-                   <|> (return x)
+        tur_expr = do { x <- or_expr; rest x } <?> "ternary expression"
+          where rest x = (do { symbol "?"; y <- expr; colon; z <- expr; rest $ ETernary x y z })
+                         <|> (return x)
+        or_expr  = chainl1 and_expr $ binop "||" OpBoolOr
+        and_expr = chainl1 int_expr $ binop "&&" OpBoolAnd
+        int_expr = chainl1 cmp_expr $ binop "..." OpInterval
+        cmp_expr = chainl1 bin_expr $ choice [
+                binop "==" OpEq, binop "!=" OpNeq, binop "<=" OpLeq,
+                binop ">=" OpGeq, binop "<=" OpLeq, binop "<" OpLt, binop ">" OpGt
+            ]
+        bin_expr = chainl1 sft_expr $ choice [binop "|" OpOr, binop "&" OpAnd, binop "^" OpXor]
+        sft_expr = chainl1 add_expr $ choice [binop ">>" OpShr, binop "<<" OpShl, binop ">>>" OpUShr]
+        add_expr = chainl1 mul_expr $ choice [binop "+" OpAdd, binop "-" OpSub]
+        mul_expr = chainl1 mod_expr $ choice [binop "*" OpMul, binop "/" OpDiv]
+        mod_expr = chainl1 una_expr $ binop "%" OpMod
+        una_expr = try (do { symbol "-"; e <- una_expr; return $ EUnOp OpNeg FlagPre e })
+                <|>try (do { symbol "~"; e <- una_expr; return $ EUnOp OpNegBits FlagPre e })
+                <|>try (do { symbol "!"; e <- una_expr; return $ EUnOp OpNot FlagPre e })
+                <|>try (do { symbol "++"; e <- una_expr; return $ EUnOp OpInc FlagPre e })
+                <|>try (do { symbol "--"; e <- una_expr; return $ EUnOp OpDec FlagPre e })
+                <|>try (do { e <- base_expr; symbol "++"; return $ EUnOp OpInc FlagPost e })
+                <|>try (do { e <- base_expr; symbol "--"; return $ EUnOp OpDec FlagPost e })
+                   <|> base_expr
+                   <?> "unary expression"
 
+{-
 -- expressions for precedences up to the ?: ternary operator.
 low_expr = buildExpressionParser table base_expr <?> "small expression"
     where
@@ -234,14 +269,15 @@ low_expr = buildExpressionParser table base_expr <?> "small expression"
                  [binop "..." OpInterval],
                  [binop "&&"  OpBoolAnd ],
                  [binop "||"  OpBoolOr  ]]
-        unop  s pre fix op = pre (do { operator s; return $ EUnop op fix })
+        unop  s pre fix op = pre (do { operator s; return $ EUnOp op fix })
         binop s op = Infix (do { operator s; return $ EBinop op }) AssocLeft
+-}
 
 -- const, bracketed expression, array literal
 factor =  (fmap EConst constant)
       <|> (parens expr)
       <|> (fmap EArray $ brackets (sepBy expr comma))
-      <|> (fmap EPre $ pre expr)
+      <|> (fmap EPre $ pre (many expr))
       <?> "factor expression"
 
 -- field access, function call, array access
@@ -253,10 +289,15 @@ factoring = do { x <- factor; rest x } <?> "factored expression"
                       })
                    <|> return x
 
+-- expression, or #if'ed expression ; #end style
+statement = try ((fmap EPre) $ pre (many statement))
+            <|> (do { e <- expr; optional semi; return e })
+            <?> "statement"
+
 -- basic expressions
 base_expr =  try (do { x <- ident; reserved "in"; e <- expr; return $ EIn x e })
          <|> try factoring
-         <|> (fmap (EBlock) $ braces (many $ do { e <- expr; optional semi; return e }))
+         <|> (fmap (EBlock) $ braces (many statement)) 
          <|> (do { reserved "while"; cond <- parens expr; e <- expr; return $ EWhile True cond e })
          <|> (do { reserved "do"; e <- expr; reserved "while"; cond <- parens expr; return $ EWhile False cond e })
          <|> ((reserved "continue")>>(return EContinue))
