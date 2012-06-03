@@ -20,7 +20,8 @@ langDef = emptyDef {
     P.opLetter = oneOf "!=<>?~-+*/^|&:%",
     P.reservedNames = ["if","else","try","catch","throw","for","while","in","new",
                      "public","private","inline","override","static","do","cast",
-                     "switch","case","var","function","class","extends","return"],
+                     "switch","case","var","function","class","extends","return",
+                     "#if","#elseif","#else","#end"],
     P.reservedOpNames = ["+","-","*","/","%",
                        "|","&","^","<<",">>",">>>",
                        "||","&&",
@@ -58,6 +59,17 @@ metadata      = (char '@')>>(optional $ char ':')>>(many1 $ alphaNum <|> char '_
            
 ----------------------------------------------------------------------------------------------
 
+-- #if expr a [#elseif expr a] [#else a] #end
+type Pre a = (PreExpr, a, [(PreExpr, a)], Maybe a)
+
+data PreExpr = PreIdent Ident
+             | PreAnd PreExpr PreExpr
+             | PreOr PreExpr PreExpr
+             | PreNot PreExpr
+             deriving(Show)
+
+----------------------------------------------------------------------------------------------
+
 type Type    = String -- name of Type
 type Ident   = String -- name of Ident
 type Package = String -- name of Package
@@ -75,7 +87,9 @@ data Binop = OpAdd | OpMul | OpDiv | OpSub | OpMod | OpAssign | OpEq | OpNeq | O
 data Unop = OpInc | OpDec | OpNot | OpNeg | OpNegBits deriving (Show)
 data UnopFlag = FlagPre | FlagPost deriving (Show)
 
-data Access = APublic | APrivate | AStatic | AOverride | AInline deriving (Show)
+data Access = APublic | APrivate | AStatic | AOverride | AInline
+            | APre (Pre [Access])
+            deriving (Show)
 
 data Expr = EConst Constant                     -- literal/ident
           | EArray [Expr]                       -- [Expr*]
@@ -100,6 +114,7 @@ data Expr = EConst Constant                     -- literal/ident
           | EVars [VarExpr]                     -- var VarExpr+
           | EFunction FuncExpr                  -- function FuncExpr
           | ECast Expr (Maybe Type)             -- cast expr or cast(expr,Type)
+          | EPre (Pre Expr)
           deriving (Show)
 
 type Catch    = (Ident,Type,Expr)                  -- (Ident : Type) Expr
@@ -108,16 +123,41 @@ type VarExpr  = (Ident,Maybe Type,Maybe Expr)      -- Ident [:Type]? [=Expr]?
 type FuncExpr = ([Param],Maybe Type,Expr)          -- (Params*) [:Type]? Expr
 type Param    = (Bool,VarExpr)                     -- ?? VarExpr
 
-type TypeDef  = (Type,Ident) -- alias Type as Ident
+type TypeDef  = (Type,Either Type (Pre Type)) -- alias Type as Type
 
 data ClassTrait = Member VarExpr | Method Ident FuncExpr | Property Ident Ident Ident Type deriving (Show)
 type Class    = (Ident,Maybe Type,[([Access],ClassTrait)])
 
-type File     = (Package,[Package],[TypeDef],[Class]) -- [Package] for imports.
+data Import   = SImport Package | PreImport (Pre [Import]) deriving (Show)
+type File     = (Package,[Import],[TypeDef],[Class]) -- [Package] for imports.
 
 ----------------------------------------------------------------------------------------------
 
-join sep = foldl (\x y -> x ++ sep ++ y) ""
+join sep [] = ""
+join sep (x:[]) = x
+join sep xs = foldl1 (\x y -> x ++ sep ++ y) xs
+
+----------------------------------------------------------------------------------------------
+
+pre_expr = buildExpressionParser table base_expr <?> "Preprocessor Expression"
+    where
+        table = [[Prefix (do { operator "!"; return PreNot })],
+                 [Infix (do { operator "&&"; return PreAnd }) AssocLeft],
+                 [Infix (do { operator "||"; return PreOr }) AssocLeft]]
+
+        base_expr = (parens pre_expr) <|> (fmap PreIdent ident) <?> "Preprocessor base Expression"
+
+-- parse instances of 'a' wrapped in pre-processor condition statement
+-- eg: pre ident would parse things like #if 'condition' <<ident>>* #end
+pre a = (do { reserved "#if"; cond <- pre_expr
+           ; x <- a
+           ; elses <- many $ do { reserved "#elseif"; cond <- pre_expr
+                                ; x <- a
+                                ; return (cond,x) }
+           ; elsec <- optionMaybe $ (reserved "#else") >> a
+           ; reserved "#end"
+           ; return $ (cond,x,elses,elsec) })
+        <?> "Preprocessor statement"
 
 ----------------------------------------------------------------------------------------------
 
@@ -147,14 +187,17 @@ expr = (chainr1 tur_expr $ foldl1 (<|>) [
     where op s x = do { operator s; return $ EBinop (OpAssignOp x) }
 
 -- expressions up to and including ?: ternary operator
-tur_expr = do { x <- pre_expr; rest x } <?> "ternary expression"
+tur_expr = do { x <- low_expr; rest x } <?> "ternary expression"
     where rest x = (do { symbol "?"; y <- tur_expr; colon; z <- tur_expr; rest $ ETernary x y z })
                    <|> (return x)
 
 -- expressions for precedences up to the ?: ternary operator.
-pre_expr = buildExpressionParser table base_expr <?> "small expression"
+low_expr = buildExpressionParser table base_expr <?> "small expression"
     where
-        table = [[binop "%"  OpMod],
+        table = [[unop "-" Prefix FlagPre OpNeg, unop "~" Prefix FlagPre OpNegBits, unop "!" Prefix FlagPre OpNot,
+                    unop "++" Prefix FlagPre OpInc, unop "--" Prefix FlagPre OpDec,
+                    unop "++" Postfix FlagPost OpInc, unop "--" Postfix FlagPost OpDec],
+                 [binop "%"  OpMod],
                  [binop "*"  OpMul, binop "/"  OpDiv],
                  [binop "+"  OpAdd, binop "-"  OpSub],
                  [binop ">>" OpShr, binop "<<" OpShl, binop ">>>" OpUShr],
@@ -164,12 +207,14 @@ pre_expr = buildExpressionParser table base_expr <?> "small expression"
                  [binop "..." OpInterval],
                  [binop "&&"  OpBoolAnd ],
                  [binop "||"  OpBoolOr  ]]
+        unop  s pre fix op = pre (do { operator s; return $ EUnop op fix })
         binop s op = Infix (do { operator s; return $ EBinop op }) AssocLeft
 
 -- const, bracketed expression, array literal
 factor =  (fmap EConst constant)
       <|> (parens expr)
       <|> (fmap EArray $ brackets (sepBy expr comma))
+      <|> (fmap EPre $ pre expr)
       <?> "factor expression"
 
 -- field access, function call, array access
@@ -238,9 +283,11 @@ func_expr = do { params <- parens $ sepBy param comma;
 accessor = (foldl1 (<|>) $ map (\(x,y) -> (reserved x) >> (return y)) $ [
                 ("public",APublic), ("private",APrivate), ("inline",AInline),
                 ("override",AOverride), ("static",AStatic)
-           ]) <?> "access modifier"
+           ])
+           <|> (fmap APre $ (pre $ many accessor))
+           <?> "access modifier"
 
-typedef = (do { reserved "typedef"; a <- ident; symbol "="; t <- typep; return $ (a,t) })
+typedef = (do { reserved "typedef"; a <- typep; symbol "="; t <- (fmap Left typep) <|> (fmap Right $ pre typep); semi; return $ (a,t) })
          <?> "typedef"
 
 package = (do { reserved "package";
@@ -252,7 +299,8 @@ package = (do { reserved "package";
 importp = (do { reserved "import";
               ; name <- (fmap (join ".")) (sepBy ident dot);
               ; semi
-              ; return name })
+              ; return $ SImport name })
+          <|> (fmap PreImport $ (pre $ many importp))
           <?> "import declaration"
 
 classp = (do { reserved "class";
@@ -261,7 +309,7 @@ classp = (do { reserved "class";
              ; symbol "{"
              ; traits <- many $
                     do { as <- many accessor
-                       ; trait <- try (do { reserved "var"; v <- var_expr; return $ Member v })
+                       ; trait <- try (do { reserved "var"; v <- var_expr; semi; return $ Member v })
                                   <|> (do { reserved "function"; name <- ident; f <-func_expr; return $ Method name f })
                                   <|> (do { reserved "var"; name <-ident
                                           ; symbol "("; get <- ident; comma; set <- ident; symbol ")"
