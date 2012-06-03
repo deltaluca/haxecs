@@ -3,7 +3,7 @@ module Parser
         -- * AST data types
         Pre, PreExpr,
         Type,Ident,Package,
-        Constant,Binop,UnOp,UnOpFlag,
+        Constant,Binop,Unop,UnopFlag,
         Access,Expr,
         Catch,Case,VarExpr,FuncExpr,Param, 
         ClassTrait,Import,FileTrait,File,
@@ -14,20 +14,13 @@ module Parser
     ) where
 
 import System.Environment
-import Text.Parsec hiding (string,chainl1,chainr1)
+import Text.Parsec hiding (string)
 import qualified Text.Parsec.Token as P
 import Text.Parsec.Language
 import Text.Parsec.Expr
 import Control.Monad.State hiding (join)
 
 ----------------------------------------------------------------------------------------------
-
-operators = ["+","-","*","/","%",
-             "|","&","^","<<",">>",">>>",
-             "||","&&",
-             "==","!=",">","<",">=","<=",
-             "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
-             "!","~","++","--","?",":","..."]
 
 langDef :: LanguageDef st
 langDef = emptyDef {
@@ -43,7 +36,12 @@ langDef = emptyDef {
                      "public","private","inline","override","static","do","cast",
                      "switch","case","var","function","class","extends","return",
                      "#if","#elseif","#else","#end"],
-    P.reservedOpNames = operators,
+    P.reservedOpNames = ["+","-","*","/","%",
+                       "|","&","^","<<",">>",">>>",
+                       "||","&&",
+                       "==","!=",">","<",">=","<=",
+                       "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
+                       "!","~","++","--","?",":","..."],
     P.caseSensitive = True
 }
 
@@ -71,9 +69,6 @@ stringLiteral = P.stringLiteral lexer
 
 -- ignore whitespace and metadata for lexemes
 whiteSpace    = let ws = P.whiteSpace lexer in ws>>many(metadata>>ws)
---metadata      = ((char '@')>>(optional $ char ':')>>(many1 $ alphaNum <|> char '_')>>(return ()))
---               <?> ""
-
 metadata = (do { char '@'; optional (char ':')
                ; many1 (alphaNum <|> char '_')
                ; optional(do { char '('
@@ -81,7 +76,7 @@ metadata = (do { char '@'; optional (char ':')
                              ; char ')' })
                ; return () }) 
            <?> ""
-           
+ 
 ----------------------------------------------------------------------------------------------
 
 -- #if expr a [#elseif expr a] [#else a] #end
@@ -109,8 +104,8 @@ data Binop = OpAdd | OpMul | OpDiv | OpSub | OpMod | OpAssign | OpEq | OpNeq | O
            | OpGeq | OpLeq | OpOr | OpAnd | OpXor | OpBoolAnd | OpBoolOr | OpShl | OpShr
            | OpUShr | OpAssignOp Binop | OpInterval
            deriving (Show)
-data UnOp = OpInc | OpDec | OpNot | OpNeg | OpNegBits deriving (Show)
-data UnOpFlag = FlagPre | FlagPost deriving (Show)
+data Unop = OpInc | OpDec | OpNot | OpNeg | OpNegBits deriving (Show)
+data UnopFlag = FlagPre | FlagPost deriving (Show)
 
 data Access = APublic | APrivate | AStatic | AOverride | AInline
             | APre (Pre [Access])
@@ -120,7 +115,7 @@ data Expr = EConst Constant                     -- literal/ident
           | EArray [Expr]                       -- [Expr*]
           | EArrayAccess Expr Expr              -- Expr[Expr]
           | EBlock [Expr]                       -- {(Expr;?)*}
-          | EUnOp UnOp UnOpFlag Expr            
+          | EUnop Unop UnopFlag Expr            
           | EBinop Binop Expr Expr
           | ETernary Expr Expr Expr             -- Expr ? Expr : Expr
           | EWhile Bool Expr Expr               -- while (Expr) Expr (true) do Expr while(Expr) (false)
@@ -217,48 +212,39 @@ typep = chainl1 (do { t <- ident
 
 ----------------------------------------------------------------------------------------------
 
-chainl1 p op = do { x <- p; rest x}
-    where rest x = (try $ do { f <- op; y <- p; rest (f x y) }) <|> (return x)
-chainr1 p op = scan
-    where scan = do { x <- p; rest x }
-          rest x = (try $ do { f <- op; y <- scan; return (f x y) }) <|> (return x)
-
 -- all expressions
 expr = (chainr1 tur_expr $ choice [
-         binop "=" OpAssign,
-         eqop "+="  OpAdd, eqop "-="  OpSub, eqop "/="   OpDiv, eqop "*=" OpMul, eqop "%=" OpMod,
-         eqop "<<=" OpShl, eqop ">>=" OpShr, eqop ">>>=" OpUShr,
-         eqop "&="  OpAnd, eqop "|="  OpOr,  eqop "^="   OpXor
+         (do { operator "="; return $ EBinop OpAssign }),
+         op "+="  OpAdd, op "-="  OpSub, op "/="   OpDiv, op "*=" OpMul, op "%=" OpMod,
+         op "<<=" OpShl, op ">>=" OpShr, op ">>>=" OpUShr,
+         op "&="  OpAnd, op "|="  OpOr,  op "^="   OpXor
        ])
       <?> "expression"
-    where
-        binop s x = do { symbol s; return $ EBinop x }
-        eqop s x = do { symbol s; return $ EBinop (OpAssignOp x) }
+    where op s x = do { operator s; return $ EBinop (OpAssignOp x) }
 
-        tur_expr = do { x <- or_expr; rest x } <?> "ternary expression"
-          where rest x = (do { symbol "?"; y <- expr; colon; z <- expr; rest $ ETernary x y z })
-                         <|> (return x)
-        or_expr  = chainl1 and_expr $ binop "||" OpBoolOr
-        and_expr = chainl1 int_expr $ binop "&&" OpBoolAnd
-        int_expr = chainl1 cmp_expr $ binop "..." OpInterval
-        cmp_expr = chainl1 bin_expr $ choice [
-                binop "==" OpEq, binop "!=" OpNeq, try $ binop "<=" OpLeq,
-                try $ binop ">=" OpGeq, binop "<" OpLt, binop ">" OpGt
-            ]
-        bin_expr = chainl1 sft_expr $ choice [binop "|" OpOr, binop "&" OpAnd, binop "^" OpXor]
-        sft_expr = chainl1 add_expr $ choice [binop ">>" OpShr, binop "<<" OpShl, binop ">>>" OpUShr]
-        add_expr = chainl1 mul_expr $ choice [binop "+" OpAdd, binop "-" OpSub]
-        mul_expr = chainl1 mod_expr $ choice [binop "*" OpMul, binop "/" OpDiv]
-        mod_expr = chainl1 una_expr $ binop "%" OpMod
-        una_expr = try (do { symbol "-"; e <- una_expr; return $ EUnOp OpNeg FlagPre e })
-                <|>try (do { symbol "~"; e <- una_expr; return $ EUnOp OpNegBits FlagPre e })
-                <|>try (do { symbol "!"; e <- una_expr; return $ EUnOp OpNot FlagPre e })
-                <|>try (do { symbol "++"; e <- una_expr; return $ EUnOp OpInc FlagPre e })
-                <|>try (do { symbol "--"; e <- una_expr; return $ EUnOp OpDec FlagPre e })
-                <|>try (do { e <- base_expr; symbol "++"; return $ EUnOp OpInc FlagPost e })
-                <|>try (do { e <- base_expr; symbol "--"; return $ EUnOp OpDec FlagPost e })
-                   <|> base_expr
-                   <?> "unary expression"
+-- expressions up to and including ?: ternary operator
+tur_expr = do { x <- low_expr; rest x } <?> "ternary expression"
+    where rest x = (do { symbol "?"; y <- tur_expr; colon; z <- tur_expr; rest $ ETernary x y z })
+                   <|> (return x)
+
+-- expressions for precedences up to the ?: ternary operator.
+low_expr = buildExpressionParser table base_expr <?> "small expression"
+    where
+        table = [[unop "-" Prefix FlagPre OpNeg, unop "~" Prefix FlagPre OpNegBits, unop "!" Prefix FlagPre OpNot,
+                    unop "++" Prefix FlagPre OpInc, unop "--" Prefix FlagPre OpDec,
+                    unop "++" Postfix FlagPost OpInc, unop "--" Postfix FlagPost OpDec],
+                 [binop "%"  OpMod],
+                 [binop "*"  OpMul, binop "/"  OpDiv],
+                 [binop "+"  OpAdd, binop "-"  OpSub],
+                 [binop ">>" OpShr, binop "<<" OpShl, binop ">>>" OpUShr],
+                 [binop "|"  OpOr , binop "&"  OpAnd, binop "^"   OpXor ],
+                 [binop "==" OpEq , binop "!=" OpNeq, binop "<="  OpLeq,
+                     binop ">=" OpGeq, binop "<" OpLt, binop ">" OpGt],
+                 [binop "..." OpInterval],
+                 [binop "&&"  OpBoolAnd ],
+                 [binop "||"  OpBoolOr  ]]
+        unop  s pre fix op = pre (do { operator s; return $ EUnop op fix })
+        binop s op = Infix (do { operator s; return $ EBinop op }) AssocLeft
 
 -- const, bracketed expression, array literal
 factor =  (fmap EConst constant)
@@ -371,6 +357,7 @@ ctrait = (do { as <- many accessor
              ; return $ CTrait as trait })
          <?> "class trait"
     where fname = (try ident) <|> do { reserved "new"; return "new" } 
+ 
 
 class_trait = (try ctrait) <|> (fmap CPre $ pre (many class_trait))
 

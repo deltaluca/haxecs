@@ -4,7 +4,8 @@ import System.Environment
 import Parser
 
 main = do { args <- getArgs
-          ; putStrLn $ "parsing "++(args!!0)
           ; file <- parseFile (args !! 0)
-          ; putStrLn $ show file
+          ; case(file) of
+                Left err -> putStrLn $ "Parser error: " ++ (show err)
+                Right err -> return ()
           }
