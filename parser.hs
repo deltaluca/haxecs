@@ -27,7 +27,7 @@ operators = ["+","-","*","/","%",
              "||","&&",
              "==","!=",">","<",">=","<=",
              "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
-             "!","~","++","--","?",":","..."]
+             "!","~","++","--","?",":","...","->"]
 
 opletter = "!=<>?~-+*/^|&:%"
 
@@ -107,7 +107,12 @@ data PreExpr = PreIdent Ident
 
 ----------------------------------------------------------------------------------------------
 
-type Type    = String -- name of Type
+data Type = BasicType String      -- [Package.]?Ident
+          | ParamType Type [Type] -- Type<Types...>
+          | PreType (Pre Type)    -- #if Type #else ... #end
+          | FuncType Type Type    -- Type -> Type
+          deriving (Show)
+
 type Ident   = String -- name of Ident
 type Package = String -- name of Package
 
@@ -173,7 +178,7 @@ data ClassTrait = CTrait [Access] TraitInfo
 data Import    = SImport Package | PreImport (Pre [Import]) deriving (Show)
 
 data FileTrait = FImport Import
-               | FTypeDef Type (Either Type (Pre Type))
+               | FTypeDef Type Type 
                | FClass Ident (Maybe Type) [ClassTrait]
                | FPre (Pre [FileTrait])
                deriving (Show)
@@ -220,12 +225,27 @@ constant =      do { x <- stringLiteral; return $ CString x }
        <|>      do { x <- integer;       return $ CInt    x }
        <?> "constant"
 
-typep = chainl1 (do { t <- ident
-                    ; params <- option "" $ fmap ((\x->"<"++x++">") . (join ",")) (angles (sepBy1 typep comma))
-                    ; return (t ++ params)
-                    })
-                (do { sep <- (symbol ".")<|>(symbol "->"); return (\a b -> a ++ sep ++ b) })
-        <?> "type"
+typep = chainr1 base_type (do { operator "->"; return FuncType })
+    where
+        factor_type = ((fmap BasicType) $ (fmap (join ".")) (sepBy1 ident dot))
+                   <|> (parens typep)
+                   <|> (fmap PreType $ pre (typep))
+                   <?> "factor type"
+        base_type = do { x <- factor_type; rest x } <?> "factored type"
+            where rest x = (do { y <- (fmap (ParamType x) $ angles (sepBy1 typep comma))
+                               ; rest y })
+                        <|>  return x
+{-
+typep =   ((fmap SType) $ try type_pare)
+      <|> ((fmap TPre)  $ pre typep)
+      <?> "Type name"
+    where type_pare = chainl1 (do { t <- ident
+                                  ; params <- option "" $ fmap ((\x->"<"++x++">") . (join ",")) (angles (sepBy1 typep comma))
+                                  ; return (t ++ params)
+                                  })
+                              (do { sep <- (symbol ".")<|>(symbol "->"); return (\a b -> a ++ sep ++ b) })
+                      <?> "type"
+-}
 
 ----------------------------------------------------------------------------------------------
 
@@ -275,8 +295,7 @@ factoring = do { x <- factor; rest x } <?> "factored expression"
     where rest x = (do { y <- try (fmap (EField x) $ dot >> ident)
                            <|> (fmap (ECall x) $ parens (sepBy expr comma))
                            <|> (fmap (EArrayAccess x) $ brackets expr)
-                      ; rest(y)
-                      })
+                      ; rest y })
                    <|> return x
 
 -- expression, or #if'ed expression ; #end style
@@ -346,7 +365,7 @@ accessor = (foldl1 (<|>) $ map (\(x,y) -> (reserved x) >> (return y)) $ [
            <?> "access modifier"
 
 typedef = (do { reserved "typedef"
-              ;  a <- typep; symbol "="; t <- (fmap Left typep) <|> (fmap Right $ pre typep)
+              ;  a <- typep; symbol "="; t <- typep
               ;  semi
               ; return $ FTypeDef a t })
          <?> "typedef"
