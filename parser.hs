@@ -7,7 +7,7 @@ module Parser
         Access,Expr,
         Catch,Case,VarExpr,FuncExpr,Param, 
         ClassTrait,Import,FileTrait,File,
-operator,
+
         -- * Functions
         parseFile -- :: String -> Either ParseError File
 
@@ -235,17 +235,6 @@ typep = chainr1 base_type (do { operator "->"; return FuncType })
             where rest x = (do { y <- (fmap (ParamType x) $ angles (sepBy1 typep comma))
                                ; rest y })
                         <|>  return x
-{-
-typep =   ((fmap SType) $ try type_pare)
-      <|> ((fmap TPre)  $ pre typep)
-      <?> "Type name"
-    where type_pare = chainl1 (do { t <- ident
-                                  ; params <- option "" $ fmap ((\x->"<"++x++">") . (join ",")) (angles (sepBy1 typep comma))
-                                  ; return (t ++ params)
-                                  })
-                              (do { sep <- (symbol ".")<|>(symbol "->"); return (\a b -> a ++ sep ++ b) })
-                      <?> "type"
--}
 
 ----------------------------------------------------------------------------------------------
 
