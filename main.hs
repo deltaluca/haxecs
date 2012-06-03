@@ -32,10 +32,10 @@ langDef = emptyDef {
 
 lexer = P.makeTokenParser langDef
 
-parens p      = lexeme $ do { char '('; res <- lexeme p; char ')'; return res; }
-brackets p    = lexeme $ do { char '['; res <- lexeme p; char ']'; return res; }
-angles p      = lexeme $ do { char '<'; res <- lexeme p; char '>'; return res; }
-braces p      = lexeme $ do { char '{'; res <- lexeme p; char '}'; return res; }
+parens p      = lexeme $ do { char '('; whiteSpace; res <- lexeme p; char ')'; return res; }
+brackets p    = lexeme $ do { char '['; whiteSpace; res <- lexeme p; char ']'; return res; }
+angles p      = lexeme $ do { char '<'; whiteSpace; res <- lexeme p; char '>'; return res; }
+braces p      = lexeme $ do { char '{'; whiteSpace; res <- lexeme p; char '}'; return res; }
 integer       = do { x <- lexeme $ (P.integer lexer) <|> (P.hexadecimal lexer); return $ fromIntegral x }
 
 ident  = lexeme $ P.identifier lexer
@@ -109,15 +109,15 @@ type FuncExpr = ([Param],Maybe Type,Expr)          -- (Params*) [:Type]? Expr
 type Param    = (Bool,VarExpr)                     -- ?? VarExpr
 
 type TypeDef  = (Type,Ident) -- alias Type as Ident
-type Member   = ([Access],Ident,Maybe Type,Maybe Expr)
-type Method   = ([Access],Ident,FuncExpr)
-type Property = ([Access],Ident,Ident,Ident,Type)  -- name, getter, setter
-type Class    = (Ident,Maybe Type,[Member],[Method],[Property])
-type File     = (Package,[Type],[Class],[TypeDef]) -- [Type] for imports.
+
+data ClassTrait = Member VarExpr | Method Ident FuncExpr | Property Ident Ident Ident Type deriving (Show)
+type Class    = (Ident,Maybe Type,[([Access],ClassTrait)])
+
+type File     = (Package,[Package],[TypeDef],[Class]) -- [Package] for imports.
 
 ----------------------------------------------------------------------------------------------
 
-join sep = foldl1 (\x y -> x ++ sep ++ y)
+join sep = foldl (\x y -> x ++ sep ++ y) ""
 
 ----------------------------------------------------------------------------------------------
 
@@ -137,12 +137,13 @@ typep = chainl1 (do { t <- ident
 ----------------------------------------------------------------------------------------------
 
 -- all expressions
-expr = chainr1 tur_expr $ foldl1 (<|>) [
+expr = (chainr1 tur_expr $ foldl1 (<|>) [
          (do { operator "="; return $ EBinop OpAssign }),
          op "+="  OpAdd, op "-="  OpSub, op "/="   OpDiv, op "*=" OpMul, op "%=" OpMod,
          op "<<=" OpShl, op ">>=" OpShr, op ">>>=" OpUShr,
          op "&="  OpAnd, op "|="  OpOr,  op "^="   OpXor
-       ]
+       ])
+      <?> "expression"
     where op s x = do { operator s; return $ EBinop (OpAssignOp x) }
 
 -- expressions up to and including ?: ternary operator
@@ -234,7 +235,53 @@ func_expr = do { params <- parens $ sepBy param comma;
 
 ----------------------------------------------------------------------------------------------
 
-mainParser = whiteSpace >> expr
+accessor = (foldl1 (<|>) $ map (\(x,y) -> (reserved x) >> (return y)) $ [
+                ("public",APublic), ("private",APrivate), ("inline",AInline),
+                ("override",AOverride), ("static",AStatic)
+           ]) <?> "access modifier"
+
+typedef = (do { reserved "typedef"; a <- ident; symbol "="; t <- typep; return $ (a,t) })
+         <?> "typedef"
+
+package = (do { reserved "package";
+              ; name <- (fmap (join ".")) (sepBy ident dot);
+              ; semi
+              ; return name })
+          <?> "package declaration"
+
+importp = (do { reserved "import";
+              ; name <- (fmap (join ".")) (sepBy ident dot);
+              ; semi
+              ; return name })
+          <?> "import declaration"
+
+classp = (do { reserved "class";
+             ; name <- ident
+             ; super <- optionMaybe $ (reserved "extends") >> typep
+             ; symbol "{"
+             ; traits <- many $
+                    do { as <- many accessor
+                       ; trait <- try (do { reserved "var"; v <- var_expr; return $ Member v })
+                                  <|> (do { reserved "function"; name <- ident; f <-func_expr; return $ Method name f })
+                                  <|> (do { reserved "var"; name <-ident
+                                          ; symbol "("; get <- ident; comma; set <- ident; symbol ")"
+                                          ; colon ; t <- typep
+                                          ; return $ Property name get set t })
+                       ; return (as,trait) }
+             ; symbol "}"
+             ; return (name, super, traits) })
+          <?> "class declaration"
+
+file = (do { p <- package
+           ; is0 <- many importp; ts0 <- many typedef
+           ; is1 <- many importp; ts1 <- many typedef
+           ; cs <- many classp
+           ; return (p,is0++is1,ts0++ts1,cs)
+           })
+
+----------------------------------------------------------------------------------------------
+
+mainParser = do { whiteSpace; res <- file; eof; return res }
 
 readExpr :: String -> String
 readExpr input = case parse mainParser "Haxe" input of
@@ -244,4 +291,5 @@ readExpr input = case parse mainParser "Haxe" input of
 main :: IO ()
 main = do
     args <- getArgs
-    putStrLn (readExpr (args !! 0))
+    file <- readFile (args !! 0)
+    putStrLn (readExpr file)
