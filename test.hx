@@ -1,18 +1,14 @@
-package zpp_nape.phys;
-import DummyNapeMain;
-import DummyMemory;
-import nape.constraint.LineJoint;
+package nape.constraint;
 import nape.constraint.WeldJoint;
 import nape.constraint.UserConstraint;
-import nape.constraint.AngleJoint;
 import nape.constraint.PivotJoint;
-import nape.constraint.MotorJoint;
-import nape.constraint.ConstraintList;
-import nape.constraint.LinearJoint;
+import nape.constraint.LineJoint;
+import nape.constraint.AngleJoint;
 import nape.constraint.DistanceJoint;
+import nape.constraint.LinearJoint;
+import nape.constraint.MotorJoint;
 import nape.constraint.ConstraintIterator;
 import nape.constraint.Constraint;
-import nape.callbacks.PreListener;
 import nape.callbacks.ConstraintCallback;
 import nape.callbacks.ListenerIterator;
 import nape.callbacks.PreCallback;
@@ -27,30 +23,31 @@ import nape.callbacks.CbTypeIterator;
 import nape.callbacks.ConstraintListener;
 import nape.callbacks.InteractionListener;
 import nape.callbacks.BodyCallback;
+import nape.callbacks.PreListener;
 import nape.callbacks.OptionType;
-import nape.callbacks.ListenerType;
 import nape.callbacks.CbTypeList;
+import nape.callbacks.ListenerType;
 import nape.callbacks.CbType;
-import nape.callbacks.Callback;
 import nape.geom.Vec2List;
 import nape.geom.RayResultList;
 import nape.geom.RayResult;
-import nape.geom.Mat23;
+import nape.callbacks.Callback;
 import nape.geom.GeomPolyIterator;
-import nape.geom.AABB;
+import nape.geom.Mat23;
 import nape.geom.RayResultIterator;
 import nape.geom.Vec2Iterator;
+import nape.geom.AABB;
 import nape.geom.GeomPoly;
-import nape.geom.Ray;
 import nape.geom.Geom;
 import nape.geom.GeomPolyList;
 import nape.geom.MarchingSquares;
+import nape.geom.Ray;
 import nape.geom.MatMN;
 import nape.geom.GeomVertexIterator;
-import nape.geom.Vec2;
 import nape.geom.Winding;
-import nape.space.Broadphase;
 import nape.geom.Vec3;
+import nape.space.Broadphase;
+import nape.space.Space;
 import nape.phys.GravMassMode;
 import nape.phys.Interactor;
 import nape.phys.InertiaMode;
@@ -63,37 +60,37 @@ import nape.phys.CompoundIterator;
 import nape.phys.MassMode;
 import nape.phys.BodyList;
 import nape.phys.BodyIterator;
-import nape.space.Space;
+import nape.geom.Vec2;
 import nape.phys.InteractorIterator;
-import nape.phys.Body;
 import nape.phys.Compound;
 import nape.util.Debug;
+import nape.phys.Body;
 import nape.util.BitmapDebug;
 import nape.shape.EdgeIterator;
 import nape.shape.Edge;
 import nape.shape.EdgeList;
+import nape.shape.Polygon;
 import nape.util.ShapeDebug;
 import nape.shape.ShapeList;
-import nape.shape.Polygon;
 import nape.shape.Circle;
 import nape.shape.ShapeType;
 import nape.shape.ShapeIterator;
-import nape.shape.Shape;
-import nape.dynamics.InteractionGroupIterator;
 import nape.dynamics.FluidArbiter;
-import nape.dynamics.InteractionFilter;
-import nape.dynamics.ArbiterIterator;
+import nape.dynamics.InteractionGroupIterator;
+import nape.shape.Shape;
 import nape.dynamics.Arbiter;
+import nape.dynamics.ArbiterIterator;
+import nape.dynamics.InteractionFilter;
 import nape.dynamics.ArbiterList;
 import nape.dynamics.ArbiterType;
 import nape.dynamics.ContactList;
 import nape.dynamics.ContactIterator;
 import nape.dynamics.Contact;
-import nape.dynamics.InteractionGroup;
 import nape.dynamics.CollisionArbiter;
+import nape.dynamics.InteractionGroup;
+import zpp_nape.ID;
 import nape.dynamics.InteractionGroupList;
 import zpp_nape.Config;
-import zpp_nape.ID;
 import zpp_nape.Const;
 import zpp_nape.constraint.WeldJoint;
 import zpp_nape.constraint.LineJoint;
@@ -103,19 +100,19 @@ import zpp_nape.constraint.MotorJoint;
 import zpp_nape.constraint.AngleJoint;
 import zpp_nape.constraint.LinearJoint;
 import zpp_nape.constraint.DistanceJoint;
-import zpp_nape.callbacks.CbSetPair;
 import zpp_nape.constraint.Constraint;
-import zpp_nape.callbacks.Listener;
+import zpp_nape.callbacks.CbSetPair;
 import zpp_nape.callbacks.CbSet;
+import zpp_nape.callbacks.Listener;
 import zpp_nape.callbacks.Callback;
 import zpp_nape.geom.Monotone;
-import zpp_nape.callbacks.CbType;
 import zpp_nape.geom.Mat23;
+import zpp_nape.callbacks.CbType;
 import zpp_nape.geom.AABB;
 import zpp_nape.geom.MatMath;
 import zpp_nape.geom.Simple;
-import zpp_nape.geom.GeomPoly;
 import zpp_nape.geom.PartitionedPoly;
+import zpp_nape.geom.GeomPoly;
 import zpp_nape.geom.VecMath;
 import zpp_nape.geom.Ray;
 import zpp_nape.geom.Geom;
@@ -125,18 +122,19 @@ import zpp_nape.geom.VecN;
 import zpp_nape.geom.PolyIter;
 import zpp_nape.geom.Simplify;
 import zpp_nape.geom.Convex;
-import zpp_nape.geom.Vec2;
 import zpp_nape.geom.MarchingSquares;
+import zpp_nape.geom.Vec2;
 import zpp_nape.geom.Vec3;
 import zpp_nape.geom.Distance;
 import zpp_nape.geom.Collide;
 import zpp_nape.space.DynAABBPhase;
-import zpp_nape.space.SweepPhase;
 import zpp_nape.space.Broadphase;
+import zpp_nape.space.SweepPhase;
 import zpp_nape.phys.Interactor;
 import zpp_nape.phys.FeatureMix;
 import zpp_nape.phys.FluidProperties;
 import zpp_nape.phys.Material;
+import zpp_nape.phys.Body;
 import zpp_nape.phys.Compound;
 import zpp_nape.util.Pool;
 import zpp_nape.util.FastHash;
@@ -144,1522 +142,369 @@ import zpp_nape.util.Math;
 import zpp_nape.util.Names;
 import zpp_nape.space.Space;
 import zpp_nape.util.HaxeMacros;
-import zpp_nape.util.Debug;
 import zpp_nape.util.WrapLists;
+import zpp_nape.util.Debug;
 import zpp_nape.util.Circular;
 import zpp_nape.util.DisjointSetForest;
 import zpp_nape.util.Queue;
 import zpp_nape.util.Array2;
-import zpp_nape.util.RBTree;
+import zpp_nape.util.Lists;
 import zpp_nape.util.Flags;
 import zpp_nape.shape.Edge;
-import zpp_nape.util.Lists;
+import zpp_nape.util.RBTree;
 import zpp_nape.shape.Shape;
-import zpp_nape.shape.Circle;
 import zpp_nape.shape.Polygon;
+import zpp_nape.shape.Circle;
 import zpp_nape.dynamics.SpaceArbiterList;
 import zpp_nape.dynamics.InteractionFilter;
 import zpp_nape.dynamics.Contact;
 import zpp_nape.dynamics.InteractionGroup;
 import zpp_nape.dynamics.Arbiter;
-#if swc@:keep#end class ZPP_Body extends ZPP_Interactor{
-    public var outer:Body;
-    public var world:Bool;
-    public var type:Int;
-    #if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function isStatic()return type==ZPP_Flags.id_BodyType_STATIC#if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function isDynamic()return type==ZPP_Flags.id_BodyType_DYNAMIC#if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function isKinematic()return type==ZPP_Flags.id_BodyType_KINEMATIC public function invalidate_type(){
-        invalidate_mass();
-        invalidate_inertia();
-    }
-    public var compound:ZPP_Compound;
-    public var shapes:ZNPList_ZPP_Shape;
-    public var wrap_shapes:ShapeList;
-    public function invalidate_shapes(){
-        invalidate_aabb();
-        invalidate_localCOM();
-        invalidate_mass();
-        invalidate_inertia();
-    }
-    public var space:ZPP_Space;
-    public var arbiters:ZNPList_ZPP_Arbiter;
-    public var wrap_arbiters:ArbiterList;
-    public var constraints:ZNPList_ZPP_Constraint;
-    public var wrap_constraints:ConstraintList;
-    public var component:ZPP_Component;
-    static var bodystack:ZNPList_ZPP_Body=null;
-    static var bodyset:ZPP_Set_ZPP_Body=null;
-    static function bodyset_lt(a:ZPP_Body,b:ZPP_Body)return a.id<b.id
-#if NAPE_NO_INLINE#else inline#end function init_bodysetlist(){
-        if(bodyset==null){
-            bodyset=new ZPP_Set_ZPP_Body();
-            bodyset.lt=bodyset_lt;
-            bodystack=new ZNPList_ZPP_Body();
+#if swc@:keep#end
+ class ConstraintList{
+    public var zpp_inner:ZPP_ConstraintList;
+    public var length(flibget_length,never):Int;
+    #if true inline function flibget_length(){
+        zpp_inner.valmod();
+        if(zpp_inner.zip_length){
+            zpp_inner.zip_length=false;
+            if(false){
+                zpp_inner.user_length=0;
+                {
+                    var cx_ite=zpp_inner.inner.begin();
+                    while(cx_ite!=null){
+                        var i=cx_ite.elem();
+                        if(true)zpp_inner.user_length++;
+                        cx_ite=cx_ite.next;
+                    }
+                };
+            }
+            else zpp_inner.user_length=zpp_inner.inner.length;
         }
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                bodyset.empty();
-            };
-            if(!res)throw "assert("+"bodyset.empty()"+") :: "+("non-empty bodyset in connected bodies at init.");
-            #end
-        };
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                bodystack.empty();
-            };
-            if(!res)throw "assert("+"bodystack.empty()"+") :: "+("non-empty bodystack in connected bodies at init.");
-            #end
-        };
+        return zpp_inner.user_length;
     }
-    function connectedBodies_cont(b:Body){
-        if(bodyset.try_insert_bool(b.zpp_inner))bodystack.add(b.zpp_inner);
+    #else inline function flibget_length(){
+        return zpp_gl();
     }
-    public function connectedBodies():BodyList{
-        init_bodysetlist();
-        var ret=new BodyList();
-        bodystack.add(this);
-        bodyset.insert(this);
-        while(!bodystack.empty()){
-            var cur=bodystack.pop_unsafe();
-            {
-                var cx_ite=cur.constraints.begin();
-                while(cx_ite!=null){
-                    var c=cx_ite.elem();
-                    c.outer.visitBodies(connectedBodies_cont);
-                    cx_ite=cx_ite.next;
-                }
-            };
+    public function zpp_gl(){
+        zpp_inner.valmod();
+        if(zpp_inner.zip_length){
+            zpp_inner.zip_length=false;
+            if(false){
+                zpp_inner.user_length=0;
+                {
+                    var cx_ite=zpp_inner.inner.begin();
+                    while(cx_ite!=null){
+                        var i=cx_ite.elem();
+                        if(true)zpp_inner.user_length++;
+                        cx_ite=cx_ite.next;
+                    }
+                };
+            }
+            else zpp_inner.user_length=zpp_inner.inner.length;
         }
-        bodyset.clear_with(function(b:ZPP_Body)ret.add(b.outer));
+        return zpp_inner.user_length;
+    }
+    public function zpp_vm(){
+        zpp_inner.valmod();
+    }
+    #end
+#if swc@:keep#end
+ public static function fromArray(array:#if flash9 Array<Dynamic>#else Array<Constraint>#end
+){
+        var ret=new ConstraintList();
+        for(i in array){
+            #if flash9#if(!NAPE_RELEASE_BUILD)if(!Std.is(i,Constraint))throw "Error: Array contains non "+"Constraint"+" types.";
+            #end
+#end
+ ret.push(i);
+        }
         return ret;
     }
-    public function interactingBodies(arbiter_type:Int):BodyList{
-        init_bodysetlist();
-        var ret=new BodyList();
-        bodystack.add(this);
-        bodyset.insert(this);
-        while(!bodystack.empty()){
-            var cur=bodystack.pop_unsafe();
+    #if flash9#if swc@:keep#end
+ public static function fromVector(vector:flash.Vector<Constraint>){
+        var ret=new ConstraintList();
+        for(i in vector)ret.push(i);
+        return ret;
+    }
+    #end
+#if swc@:keep#end
+ public function has(obj:Constraint):Bool{
+        #if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ return zpp_inner.inner.has(obj.zpp_inner);
+    }
+    #if swc@:keep#end
+ public function at(index:Int):Constraint{
+        #if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+#if(!NAPE_RELEASE_BUILD)if(index<0||index>=length)throw "Error: Index out of bounds";
+        #end
+ if(zpp_inner.reverse_flag)index=(length-1-index);
+        if(!false){
+            if(index<zpp_inner.at_index||zpp_inner.at_ite==null){
+                zpp_inner.at_index=index;
+                zpp_inner.at_ite=zpp_inner.inner.iterator_at(index);
+            }
+            else{
+                while(zpp_inner.at_index!=index){
+                    zpp_inner.at_index++;
+                    zpp_inner.at_ite=zpp_inner.at_ite.next;
+                }
+            }
+        }
+        else{
+            if(index<zpp_inner.at_index||zpp_inner.at_ite==null){
+                zpp_inner.at_index=0;
+                zpp_inner.at_ite=zpp_inner.inner.begin();
+                while(true){
+                    var x=zpp_inner.at_ite.elem();
+                    if(true)break;
+                    zpp_inner.at_ite=zpp_inner.at_ite.next;
+                }
+            }
+            while(zpp_inner.at_index!=index){
+                zpp_inner.at_index++;
+                zpp_inner.at_ite=zpp_inner.at_ite.next;
+                while(true){
+                    var x=zpp_inner.at_ite.elem();
+                    if(true)break;
+                    zpp_inner.at_ite=zpp_inner.at_ite.next;
+                }
+            }
+        }
+        return zpp_inner.at_ite.elem().outer;
+    }
+    #if swc@:keep#end
+ public function push(obj:Constraint){
+        #if(!NAPE_RELEASE_BUILD)if(zpp_inner.immutable)throw "Error: "+"Constraint"+"List is immutable";
+        #end
+ zpp_inner.modify_test();
+        #if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ var cont=if(zpp_inner.adder!=null)zpp_inner.adder(obj)else true;
+        if(cont){
+            if(zpp_inner.reverse_flag)zpp_inner.inner.add(obj.zpp_inner);
+            else{
+                if(zpp_inner.push_ite==null)zpp_inner.push_ite=empty()?null:zpp_inner.inner.iterator_at(length-1);
+                zpp_inner.push_ite=zpp_inner.inner.insert(zpp_inner.push_ite,obj.zpp_inner);
+            }
+            zpp_inner.invalidate();
+            if(zpp_inner.post_adder!=null)zpp_inner.post_adder(obj);
+        }
+        return cont;
+    }
+    #if swc@:keep#end
+ public function unshift(obj:Constraint){
+        #if(!NAPE_RELEASE_BUILD)if(zpp_inner.immutable)throw "Error: "+"Constraint"+"List is immutable";
+        #end
+ zpp_inner.modify_test();
+        #if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ var cont=if(zpp_inner.adder!=null)zpp_inner.adder(obj)else true;
+        if(cont){
+            if(zpp_inner.reverse_flag){
+                if(zpp_inner.push_ite==null)zpp_inner.push_ite=empty()?null:zpp_inner.inner.iterator_at(length-1);
+                zpp_inner.push_ite=zpp_inner.inner.insert(zpp_inner.push_ite,obj.zpp_inner);
+            }
+            else zpp_inner.inner.add(obj.zpp_inner);
+            zpp_inner.invalidate();
+            if(zpp_inner.post_adder!=null)zpp_inner.post_adder(obj);
+        }
+        return cont;
+    }
+    #if swc@:keep#end
+ public function pop():Constraint{
+        #if(!NAPE_RELEASE_BUILD)if(zpp_inner.immutable)throw "Error: "+"Constraint"+"List is immutable";
+        #end
+ zpp_inner.modify_test();
+        #if(!NAPE_RELEASE_BUILD)if(empty())throw "Error: Cannot remove from empty list";
+        #end
+#if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ var ret=null;
+        if(zpp_inner.reverse_flag){
+            ret=zpp_inner.inner.front();
+            var retx=ret.outer;
+            if(zpp_inner.subber!=null)zpp_inner.subber(retx);
+            if(!zpp_inner.dontremove)zpp_inner.inner.pop();
+        }
+        else{
+            if(zpp_inner.at_ite!=null&&zpp_inner.at_ite.next==null)zpp_inner.at_ite=null;
+            var ite=length==1?null:zpp_inner.inner.iterator_at(length-2);
+            ret=ite==null?zpp_inner.inner.front():ite.next.elem();
+            var retx=ret.outer;
+            if(zpp_inner.subber!=null)zpp_inner.subber(retx);
+            if(!zpp_inner.dontremove)zpp_inner.inner.erase(ite);
+        }
+        zpp_inner.invalidate();
+        var retx=ret.outer;
+        return retx;
+    }
+    #if swc@:keep#end
+ public function shift():Constraint{
+        #if(!NAPE_RELEASE_BUILD)if(zpp_inner.immutable)throw "Error: "+"Constraint"+"List is immutable";
+        #end
+ zpp_inner.modify_test();
+        #if(!NAPE_RELEASE_BUILD)if(empty())throw "Error: Cannot remove from empty list";
+        #end
+#if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ var ret=null;
+        if(zpp_inner.reverse_flag){
+            if(zpp_inner.at_ite!=null&&zpp_inner.at_ite.next==null)zpp_inner.at_ite=null;
+            var ite=length==1?null:zpp_inner.inner.iterator_at(length-2);
+            ret=ite==null?zpp_inner.inner.front():ite.next.elem();
+            var retx=ret.outer;
+            if(zpp_inner.subber!=null)zpp_inner.subber(retx);
+            if(!zpp_inner.dontremove)zpp_inner.inner.erase(ite);
+        }
+        else{
+            ret=zpp_inner.inner.front();
+            var retx=ret.outer;
+            if(zpp_inner.subber!=null)zpp_inner.subber(retx);
+            if(!zpp_inner.dontremove)zpp_inner.inner.pop();
+        }
+        zpp_inner.invalidate();
+        var retx=ret.outer;
+        return retx;
+    }
+    #if swc@:keep#end
+ public function add(obj:Constraint)return if(zpp_inner.reverse_flag)push(obj)else unshift(obj)#if swc@:keep#end
+ public function remove(obj:Constraint):Bool{
+        #if(!NAPE_RELEASE_BUILD)if(zpp_inner.immutable)throw "Error: "+"Constraint"+"List is immutable";
+        #end
+ zpp_inner.modify_test();
+        #if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ var ret=({
+            var ret=false;
             {
-                var cx_ite=cur.arbiters.begin();
+                var cx_ite=zpp_inner.inner.begin();
                 while(cx_ite!=null){
-                    var arb=cx_ite.elem();
+                    var x=cx_ite.elem();
                     {
-                        if((arb.type&arbiter_type)!=0){
-                            var other=if(arb.b1==cur)arb.b2 else arb.b1;
-                            if(bodyset.try_insert_bool(other))bodystack.add(other);
+                        if(x==obj.zpp_inner){
+                            ret=true;
+                            break;
                         }
                     };
                     cx_ite=cx_ite.next;
                 }
             };
-        }
-        bodyset.clear_with(function(b:ZPP_Body)ret.add(b.outer));
-        return ret;
-    }
-    public function atRest(dt:Float){
-        if(!isDynamic())return component.sleeping;
-        else{
-            var cansleep=if((velx*velx+vely*vely)>ZPP_Config.SLEEP_LINEAR_SQ)false;
-            else if(({
-                var dx:Float;
-                var dy:Float;
-                {
-                    dx=posx-pre_posx;
-                    dy=posy-pre_posy;
-                };
-                (dx*dx+dy*dy);
-            })>0.25*ZPP_Config.SLEEP_LINEAR_SQ*dt*dt)false else{
-                var dx:Float;
-                var dy:Float;
-                {
-                    dx=aabb.maxx-aabb.minx;
-                    dy=aabb.maxy-aabb.miny;
-                };
-                var idl=(dx*dx+dy*dy);
-                if(4*angvel*angvel*idl>ZPP_Config.SLEEP_ANGULAR_SQ)false else{
-                    var dr=rot-pre_rot;
-                    if(dr*dr*idl>ZPP_Config.SLEEP_ANGULAR_SQ*dt*dt)false else true;
-                }
-            }
-            if(!cansleep)component.waket=space.stamp;
-            return component.waket+ZPP_Config.SLEEP_DELAY<space.stamp;
-        }
-    }
-    public function refreshArbiters(){
-        {
-            var cx_ite=arbiters.begin();
-            while(cx_ite!=null){
-                var arb=cx_ite.elem();
-                arb.invalidated=true;
-                cx_ite=cx_ite.next;
-            }
-        };
-    }
-    public var pre_posx:Float;
-    public var pre_posy:Float;
-    public var posx:Float;
-    public var posy:Float;
-    public var wrap_pos:Vec2;
-    public var velx:Float;
-    public var vely:Float;
-    public var wrap_vel:Vec2;
-    public var forcex:Float;
-    public var forcey:Float;
-    public var wrap_force:Vec2;
-    public var kinvelx:Float;
-    public var kinvely:Float;
-    public var wrap_kinvel:Vec2;
-    public var svelx:Float;
-    public var svely:Float;
-    public var wrap_svel:Vec2;
-    #if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function invalidate_pos(skipgraphic=false){
-        {
-            var cx_ite=shapes.begin();
-            while(cx_ite!=null){
-                var s=cx_ite.elem();
-                {
-                    if(s.type==ZPP_Flags.id_ShapeType_POLYGON){
-                        s.polygon.invalidate_gverts();
-                        s.polygon.invalidate_gaxi();
-                    }
-                    s.invalidate_worldCOM();
-                };
-                cx_ite=cx_ite.next;
-            }
-        };
-        invalidate_worldCOM();
-        if(!skipgraphic)validate_graphic();
-    }
-    private function pos_invalidate(pos:ZPP_Vec2){
-        immutable_midstep("Body::position");
-        #if(!NAPE_RELEASE_BUILD)if(isStatic()&&space!=null)throw "Error: Cannot move a static object once inside a Space";
-        #end if(!(posx==pos.x&&posy==pos.y)){
-            {
-                posx=pos.x;
-                posy=pos.y;
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((posx!=posx));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(posx)"+") :: "+("vec_set(in n: "+"pos"+",in x: "+"pos.x"+",in y: "+"pos.y"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((posy!=posy));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(posy)"+") :: "+("vec_set(in n: "+"pos"+",in x: "+"pos.x"+",in y: "+"pos.y"+")");
-                    #end
-                };
-            };
-            invalidate_pos();
-            wake();
-        }
-    }
-    private function pos_validate(){
-        wrap_pos.zpp_inner.x=posx;
-        wrap_pos.zpp_inner.y=posy;
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                !((wrap_pos.zpp_inner.x!=wrap_pos.zpp_inner.x));
-            };
-            if(!res)throw "assert("+"!assert_isNaN(wrap_pos.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_pos.zpp_inner."+",in x: "+"posx"+",in y: "+"posy"+")");
-            #end
-        };
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                !((wrap_pos.zpp_inner.y!=wrap_pos.zpp_inner.y));
-            };
-            if(!res)throw "assert("+"!assert_isNaN(wrap_pos.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_pos.zpp_inner."+",in x: "+"posx"+",in y: "+"posy"+")");
-            #end
-        };
-    }
-    private function vel_invalidate(vel:ZPP_Vec2){
-        #if(!NAPE_RELEASE_BUILD)if(isStatic()&&space!=null)throw "Error: A static object within a space cannot be given a velocity";
-        #end{
-            velx=vel.x;
-            vely=vel.y;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((velx!=velx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(velx)"+") :: "+("vec_set(in n: "+"vel"+",in x: "+"vel.x"+",in y: "+"vel.y"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((vely!=vely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(vely)"+") :: "+("vec_set(in n: "+"vel"+",in x: "+"vel.x"+",in y: "+"vel.y"+")");
-                #end
-            };
-        };
-        invalidate_wake();
-    }
-    private function vel_validate(){
-        {
-            wrap_vel.zpp_inner.x=velx;
-            wrap_vel.zpp_inner.y=vely;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((wrap_vel.zpp_inner.x!=wrap_vel.zpp_inner.x));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(wrap_vel.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_vel.zpp_inner."+",in x: "+"velx"+",in y: "+"vely"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((wrap_vel.zpp_inner.y!=wrap_vel.zpp_inner.y));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(wrap_vel.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_vel.zpp_inner."+",in x: "+"velx"+",in y: "+"vely"+")");
-                #end
-            };
-        };
-    }
-    private function kinvel_invalidate(vel:ZPP_Vec2){
-        {
-            kinvelx=vel.x;
-            kinvely=vel.y;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((kinvelx!=kinvelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(kinvelx)"+") :: "+("vec_set(in n: "+"kinvel"+",in x: "+"vel.x"+",in y: "+"vel.y"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((kinvely!=kinvely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(kinvely)"+") :: "+("vec_set(in n: "+"kinvel"+",in x: "+"vel.x"+",in y: "+"vel.y"+")");
-                #end
-            };
-        };
-        invalidate_wake();
-    }
-    private function kinvel_validate(){
-        {
-            wrap_kinvel.zpp_inner.x=kinvelx;
-            wrap_kinvel.zpp_inner.y=kinvely;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((wrap_kinvel.zpp_inner.x!=wrap_kinvel.zpp_inner.x));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(wrap_kinvel.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_kinvel.zpp_inner."+",in x: "+"kinvelx"+",in y: "+"kinvely"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((wrap_kinvel.zpp_inner.y!=wrap_kinvel.zpp_inner.y));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(wrap_kinvel.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_kinvel.zpp_inner."+",in x: "+"kinvelx"+",in y: "+"kinvely"+")");
-                #end
-            };
-        };
-    }
-    private function svel_invalidate(vel:ZPP_Vec2){
-        {
-            svelx=vel.x;
-            svely=vel.y;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((svelx!=svelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(svelx)"+") :: "+("vec_set(in n: "+"svel"+",in x: "+"vel.x"+",in y: "+"vel.y"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((svely!=svely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(svely)"+") :: "+("vec_set(in n: "+"svel"+",in x: "+"vel.x"+",in y: "+"vel.y"+")");
-                #end
-            };
-        };
-        invalidate_wake();
-    }
-    private function svel_validate(){
-        {
-            wrap_svel.zpp_inner.x=svelx;
-            wrap_svel.zpp_inner.y=svely;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((wrap_svel.zpp_inner.x!=wrap_svel.zpp_inner.x));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(wrap_svel.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_svel.zpp_inner."+",in x: "+"svelx"+",in y: "+"svely"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((wrap_svel.zpp_inner.y!=wrap_svel.zpp_inner.y));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(wrap_svel.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_svel.zpp_inner."+",in x: "+"svelx"+",in y: "+"svely"+")");
-                #end
-            };
-        };
-    }
-    private function force_invalidate(force:ZPP_Vec2){
-        {
-            forcex=force.x;
-            forcey=force.y;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((forcex!=forcex));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(forcex)"+") :: "+("vec_set(in n: "+"force"+",in x: "+"force.x"+",in y: "+"force.y"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((forcey!=forcey));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(forcey)"+") :: "+("vec_set(in n: "+"force"+",in x: "+"force.x"+",in y: "+"force.y"+")");
-                #end
-            };
-        };
-        if(isDynamic())invalidate_wake();
-    }
-    private function force_validate(){
-        wrap_force.zpp_inner.x=forcex;
-        wrap_force.zpp_inner.y=forcey;
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                !((wrap_force.zpp_inner.x!=wrap_force.zpp_inner.x));
-            };
-            if(!res)throw "assert("+"!assert_isNaN(wrap_force.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_force.zpp_inner."+",in x: "+"forcex"+",in y: "+"forcey"+")");
-            #end
-        };
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                !((wrap_force.zpp_inner.y!=wrap_force.zpp_inner.y));
-            };
-            if(!res)throw "assert("+"!assert_isNaN(wrap_force.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_force.zpp_inner."+",in x: "+"forcex"+",in y: "+"forcey"+")");
-            #end
-        };
-    }
-    public function setupPosition(){
-        wrap_pos=Vec2.get(posx,posy);
-        wrap_pos.zpp_inner.inuse=true;
-        if(world)wrap_pos.zpp_inner.immutable=true;
-        else{
-            wrap_pos.zpp_inner._invalidate=pos_invalidate;
-            wrap_pos.zpp_inner._validate=pos_validate;
-        }
-    }
-    public function setupVelocity(){
-        wrap_vel=Vec2.get(velx,vely);
-        wrap_vel.zpp_inner.inuse=true;
-        if(world)wrap_vel.zpp_inner.immutable=true;
-        else{
-            wrap_vel.zpp_inner._invalidate=vel_invalidate;
-            wrap_vel.zpp_inner._validate=vel_validate;
-        }
-    }
-    public function setupkinvel(){
-        wrap_kinvel=Vec2.get(kinvelx,kinvely);
-        wrap_kinvel.zpp_inner.inuse=true;
-        if(world)wrap_kinvel.zpp_inner.immutable=true;
-        else{
-            wrap_kinvel.zpp_inner._invalidate=kinvel_invalidate;
-            wrap_kinvel.zpp_inner._validate=kinvel_validate;
-        }
-    }
-    public function setupsvel(){
-        wrap_svel=Vec2.get(svelx,svely);
-        wrap_svel.zpp_inner.inuse=true;
-        if(world)wrap_svel.zpp_inner.immutable=true;
-        else{
-            wrap_svel.zpp_inner._invalidate=svel_invalidate;
-            wrap_svel.zpp_inner._validate=svel_validate;
-        }
-    }
-    public function setupForce(){
-        wrap_force=Vec2.get(forcex,forcey);
-        wrap_force.zpp_inner.inuse=true;
-        if(world)wrap_force.zpp_inner.immutable=true;
-        else{
-            wrap_force.zpp_inner._invalidate=force_invalidate;
-            wrap_force.zpp_inner._validate=force_validate;
-        }
-    }
-    private function cvel_validate(){
-        wrapcvel.zpp_inner.x=velx+kinvelx;
-        wrapcvel.zpp_inner.y=vely+kinvely;
-        wrapcvel.zpp_inner.z=angvel+kinangvel;
-    }
-    public var wrapcvel:Vec3;
-    public function setup_cvel(){
-        var me=this;
-        wrapcvel=Vec3.get();
-        wrapcvel.zpp_inner.immutable=true;
-        wrapcvel.zpp_inner.validate=cvel_validate;
-    }
-    public var angvel:Float;
-    public var torque:Float;
-    public var kinangvel:Float;
-    public var pre_rot:Float;
-    public var rot:Float;
-    #if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function invalidate_rot(?skipgraphic=false){
-        zip_axis=true;
-        {
-            var cx_ite=shapes.begin();
-            while(cx_ite!=null){
-                var s=cx_ite.elem();
-                {
-                    if(s.type==ZPP_Flags.id_ShapeType_POLYGON){
-                        s.polygon.invalidate_gverts();
-                        s.polygon.invalidate_gaxi();
-                    }
-                    s.invalidate_worldCOM();
-                };
-                cx_ite=cx_ite.next;
-            }
-        };
-        invalidate_worldCOM();
-        if(!skipgraphic)validate_graphic();
-    }
-    public var axisx:Float;
-    public var axisy:Float;
-    public var zip_axis:Bool;
-    #if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function validate_axis(){
-        if(zip_axis){
-            zip_axis=false;
-            quick_validate_axis();
-        }
-    }
-    #if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function quick_validate_axis(){
-        {
-            axisx=Math.sin(rot);
-            axisy=Math.cos(rot);
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((axisx!=axisx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(axisx)"+") :: "+("vec_set(in n: "+"axis"+",in x: "+"Math.sin(rot)"+",in y: "+"Math.cos(rot)"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((axisy!=axisy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(axisy)"+") :: "+("vec_set(in n: "+"axis"+",in x: "+"Math.sin(rot)"+",in y: "+"Math.cos(rot)"+")");
-                #end
-            };
-        };
-    }
-    #if NAPE_NO_INLINE#elseif(flash9&&flib)@:ns("flibdel")#end public#if NAPE_NO_INLINE#else inline#end function delta_rot(dr:Float){
-        rot+=dr;
-        if(dr*dr>0.0001)quick_validate_axis();
-        else{
-            var d2=dr*dr;
-            var p=1-0.5*d2;
-            var m=1-d2*d2/8;
-            var nx=(p*axisx+dr*axisy)*m;
-            axisy=(p*axisy-dr*axisx)*m;
-            axisx=nx;
-        }
-    }
-    public var mass:Float;
-    public var zip_mass:Bool;
-    public var massMode:Int;
-    public var imass:Float;
-    public var smass:Float;
-    public var cmass:Float;
-    public var nomove:Bool;
-    public function invalidate_mass(){
-        if(massMode==ZPP_Flags.id_MassMode_DEFAULT)zip_mass=true;
-        invalidate_gravMass();
-    }
-    public function validate_mass(){
-        var exist=false;
-        if(zip_mass||(massMode==ZPP_Flags.id_MassMode_DEFAULT&&exist)){
-            zip_mass=false;
-            if(massMode==ZPP_Flags.id_MassMode_DEFAULT){
-                cmass=0;
-                {
-                    var cx_ite=shapes.begin();
-                    while(cx_ite!=null){
-                        var s=cx_ite.elem();
-                        {
-                            s.refmaterial.density=s.material.density;
-                            s.validate_area_inertia();
-                            cmass+=s.area*s.material.density;
-                        };
-                        cx_ite=cx_ite.next;
-                    }
-                };
-            }
-            if(isDynamic()&&!nomove){
-                mass=cmass;
-                imass=smass=1.0/mass;
-            }
-            else{
-                mass=ZPP_Const.POSINF();
-                imass=smass=0.0;
-            }
-            if(exist)invalidate_inertia();
-        }
-    }
-    public var gravMass:Float;
-    public var zip_gravMass:Bool;
-    public var gravMassMode:Int;
-    public var gravMassScale:Float;
-    public var zip_gravMassScale:Bool;
-    public function invalidate_gravMass(){
-        if(gravMassMode!=ZPP_Flags.id_GravMassMode_FIXED)zip_gravMass=true;
-        if(gravMassMode!=ZPP_Flags.id_GravMassMode_SCALED)zip_gravMassScale=true;
-        wake();
-    }
-    public function validate_gravMass(){
-        if(zip_gravMass){
-            zip_gravMass=false;
-            validate_mass();
-            if(gravMassMode==ZPP_Flags.id_GravMassMode_DEFAULT){
-                validate_mass();
-                gravMass=cmass;
-            }
-            else if(gravMassMode==ZPP_Flags.id_GravMassMode_SCALED){
-                validate_mass();
-                gravMass=cmass*gravMassScale;
-            }
-        }
-    }
-    public function invalidate_gravMassScale(){
-        if(gravMassMode!=ZPP_Flags.id_GravMassMode_SCALED)zip_gravMassScale=true;
-        else invalidate_gravMass();
-    }
-    public function validate_gravMassScale(){
-        if(zip_gravMassScale){
-            zip_gravMassScale=false;
-            if(gravMassMode==ZPP_Flags.id_GravMassMode_DEFAULT)gravMassScale=1.0;
-            else if(gravMassMode==ZPP_Flags.id_GravMassMode_FIXED){
-                validate_mass();
-                gravMassScale=gravMass/cmass;
-            }
-        }
-    }
-    public var inertiaMode:Int;
-    public var inertia:Float;
-    public var zip_inertia:Bool;
-    public var cinertia:Float;
-    public var iinertia:Float;
-    public var sinertia:Float;
-    public var norotate:Bool;
-    public function invalidate_inertia(){
-        if(inertiaMode!=ZPP_Flags.id_InertiaMode_FIXED)zip_inertia=true;
-        wake();
-    }
-    public function validate_inertia(){
-        var exist=false;
-        if(zip_inertia||(inertiaMode==ZPP_Flags.id_InertiaMode_DEFAULT&&exist)){
-            zip_inertia=false;
-            if(inertiaMode==ZPP_Flags.id_InertiaMode_DEFAULT){
-                cinertia=0;
-                {
-                    var cx_ite=shapes.begin();
-                    while(cx_ite!=null){
-                        var s=cx_ite.elem();
-                        {
-                            s.refmaterial.density=s.material.density;
-                            s.validate_area_inertia();
-                            cinertia+=s.inertia*s.area*s.material.density;
-                        };
-                        cx_ite=cx_ite.next;
-                    }
-                };
-            }
-            if(isDynamic()&&!norotate){
-                inertia=cinertia;
-                sinertia=iinertia=1.0/inertia;
-            }
-            else{
-                inertia=ZPP_Const.POSINF();
-                sinertia=iinertia=0;
-            }
-            if(exist)invalidate_inertia();
-        }
-    }
-    public function invalidate_wake(){
-        wake();
-    }
-    public var aabb:ZPP_AABB;
-    public var zip_aabb:Bool;
-    public#if NAPE_NO_INLINE#else inline#end function validate_aabb(){
-        if(zip_aabb){
-            zip_aabb=false;
-            {
-                aabb.minx=ZPP_Const.POSINF();
-                aabb.miny=ZPP_Const.POSINF();
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((aabb.minx!=aabb.minx));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(aabb.minx)"+") :: "+("vec_set(in n: "+"aabb.min"+",in x: "+"ZPP_Const.POSINF()"+",in y: "+"ZPP_Const.POSINF()"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((aabb.miny!=aabb.miny));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(aabb.miny)"+") :: "+("vec_set(in n: "+"aabb.min"+",in x: "+"ZPP_Const.POSINF()"+",in y: "+"ZPP_Const.POSINF()"+")");
-                    #end
-                };
-            };
-            {
-                aabb.maxx=ZPP_Const.NEGINF();
-                aabb.maxy=ZPP_Const.NEGINF();
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((aabb.maxx!=aabb.maxx));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(aabb.maxx)"+") :: "+("vec_set(in n: "+"aabb.max"+",in x: "+"ZPP_Const.NEGINF()"+",in y: "+"ZPP_Const.NEGINF()"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((aabb.maxy!=aabb.maxy));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(aabb.maxy)"+") :: "+("vec_set(in n: "+"aabb.max"+",in x: "+"ZPP_Const.NEGINF()"+",in y: "+"ZPP_Const.NEGINF()"+")");
-                    #end
-                };
-            };
-            {
-                var cx_ite=shapes.begin();
-                while(cx_ite!=null){
-                    var s=cx_ite.elem();
-                    {
-                        s.validate_aabb();
-                        aabb.combine(s.aabb);
-                    };
-                    cx_ite=cx_ite.next;
-                }
-            };
-        }
-    }
-    public function invalidate_aabb(){
-        zip_aabb=true;
-    }
-    public var flashgraphic:Bool;
-    public var graphic:Dynamic;
-    public var graphicUpdate:Body->Void;
-    public var graphicOffset:Vec2;
-    public function validate_graphic(){
-        if(graphicUpdate!=null)graphicUpdate(outer);
-        else if(graphic!=null&&flashgraphic){
-            #if(flash9||nme)var g:flash.display.DisplayObject=graphic;
-            g.rotation=((rot+outer.graphicAngleOffset)*180/Math.PI)%360.0;
-            {
-                g.x=(axisy*graphicOffset.x-axisx*graphicOffset.y);
-                g.y=(graphicOffset.x*axisx+graphicOffset.y*axisy);
-            };
-            {
-                var t=(1.0);
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((t!=t));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(t)"+") :: "+("vec_addeq(in a: "+"g."+",in b: "+"pos"+",in s: "+"1.0"+")");
-                    #end
-                };
-                g.x+=posx*t;
-                g.y+=posy*t;
-            };
-            #end
-        }
-    }
-    public var localCOMx:Float;
-    public var localCOMy:Float;
-    public var zip_localCOM:Bool;
-    public var worldCOMx:Float;
-    public var worldCOMy:Float;
-    public var zip_worldCOM:Bool;
-    public var wrap_localCOM:Vec2;
-    public var wrap_worldCOM:Vec2;
-    public function invalidate_localCOM(){
-        zip_localCOM=true;
-        invalidate_worldCOM();
-    }
-    public function invalidate_worldCOM(){
-        zip_worldCOM=true;
-    }
-    public function validate_localCOM(){
-        if(zip_localCOM){
-            zip_localCOM=false;
-            var tempx:Float=0;
-            var tempy:Float=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((tempx!=tempx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(tempx)"+") :: "+("vec_new(in n: "+"temp"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((tempy!=tempy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(tempy)"+") :: "+("vec_new(in n: "+"temp"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            var msum=0.0;
-            {
-                var cx_ite=shapes.begin();
-                while(cx_ite!=null){
-                    var s=cx_ite.elem();
-                    {
-                        s.validate_localCOM();
-                        s.validate_area_inertia();
-                        {
-                            var t=(s.area*s.material.density);
-                            {
-                                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                                    !((t!=t));
-                                };
-                                if(!res)throw "assert("+"!assert_isNaN(t)"+") :: "+("vec_addeq(in a: "+"temp"+",in b: "+"s.localCOM"+",in s: "+"s.area*s.material.density"+")");
-                                #end
-                            };
-                            tempx+=s.localCOMx*t;
-                            tempy+=s.localCOMy*t;
-                        };
-                        msum+=s.area*s.material.density;
-                    };
-                    cx_ite=cx_ite.next;
-                }
-            };
-            {
-                var t=(1.0/(msum));
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((t!=t));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(t)"+") :: "+("vec_mul(in a: "+"temp"+",in s: "+"1.0/(msum)"+",out r: "+"localCOM"+")");
-                    #end
-                };
-                localCOMx=tempx*t;
-                localCOMy=tempy*t;
-            };
-            if(wrap_localCOM!=null){
-                wrap_localCOM.zpp_inner.x=localCOMx;
-                wrap_localCOM.zpp_inner.y=localCOMy;
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((wrap_localCOM.zpp_inner.x!=wrap_localCOM.zpp_inner.x));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(wrap_localCOM.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_localCOM.zpp_inner."+",in x: "+"localCOMx"+",in y: "+"localCOMy"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((wrap_localCOM.zpp_inner.y!=wrap_localCOM.zpp_inner.y));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(wrap_localCOM.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_localCOM.zpp_inner."+",in x: "+"localCOMx"+",in y: "+"localCOMy"+")");
-                    #end
-                };
-            };
-            if(zip_mass&&massMode==ZPP_Flags.id_MassMode_DEFAULT){
-                zip_mass=false;
-                cmass=msum;
-                if(isDynamic()){
-                    mass=cmass;
-                    imass=smass=1.0/mass;
-                }
-                else{
-                    mass=ZPP_Const.POSINF();
-                    imass=smass=0.0;
-                }
-            }
-        }
-    }
-    public function validate_worldCOM(){
-        if(zip_worldCOM){
-            zip_worldCOM=false;
-            validate_localCOM();
-            validate_axis();
-            {
-                worldCOMx=posx+(axisy*localCOMx-axisx*localCOMy);
-                worldCOMy=posy+(localCOMx*axisx+localCOMy*axisy);
-            };
-            if(wrap_worldCOM!=null){
-                wrap_worldCOM.zpp_inner.x=worldCOMx;
-                wrap_worldCOM.zpp_inner.y=worldCOMy;
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((wrap_worldCOM.zpp_inner.x!=wrap_worldCOM.zpp_inner.x));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(wrap_worldCOM.zpp_inner.x)"+") :: "+("vec_set(in n: "+"wrap_worldCOM.zpp_inner."+",in x: "+"worldCOMx"+",in y: "+"worldCOMy"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((wrap_worldCOM.zpp_inner.y!=wrap_worldCOM.zpp_inner.y));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(wrap_worldCOM.zpp_inner.y)"+") :: "+("vec_set(in n: "+"wrap_worldCOM.zpp_inner."+",in x: "+"worldCOMx"+",in y: "+"worldCOMy"+")");
-                    #end
-                };
-            };
-        }
-    }
-    public function getlocalCOM(){
-        #if(!NAPE_RELEASE_BUILD)if(shapes.empty())throw "Error: localCOM only makes sense when Body has Shapes";
-        #end validate_localCOM();
-    }
-    public function getworldCOM(){
-        #if(!NAPE_RELEASE_BUILD)if(shapes.empty())throw "Error: worldCOM only makes sense when Body has Shapes";
-        #end validate_worldCOM();
-    }
-    public function __immutable_midstep(name:String){
-        #if(!NAPE_RELEASE_BUILD)if(space!=null&&space.midstep)throw "Error: "+name+" cannot be set during a space step()";
-        #end
-    }
-    public function clear(){
-        #if(!NAPE_RELEASE_BUILD)if(space!=null)throw "Error: Cannot clear a Body if it is currently being used by a Space!";
-        #end#if(!NAPE_RELEASE_BUILD)if(!constraints.empty())throw "Error: Cannot clear a Body if it is currently being used by a constraint!";
-        #end{
-            while(!shapes.empty()){
-                var s=shapes.pop_unsafe();
-                {
-                    s.removedFromBody();
-                    s.body=null;
-                };
-            }
-        };
-        invalidate_shapes();
-        {
-            pre_posx=0;
-            pre_posy=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((pre_posx!=pre_posx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(pre_posx)"+") :: "+("vec_set(in n: "+"pre_pos"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((pre_posy!=pre_posy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(pre_posy)"+") :: "+("vec_set(in n: "+"pre_pos"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            posx=0;
-            posy=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((posx!=posx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(posx)"+") :: "+("vec_set(in n: "+"pos"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((posy!=posy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(posy)"+") :: "+("vec_set(in n: "+"pos"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            velx=0;
-            vely=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((velx!=velx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(velx)"+") :: "+("vec_set(in n: "+"vel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((vely!=vely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(vely)"+") :: "+("vec_set(in n: "+"vel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            forcex=0;
-            forcey=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((forcex!=forcex));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(forcex)"+") :: "+("vec_set(in n: "+"force"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((forcey!=forcey));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(forcey)"+") :: "+("vec_set(in n: "+"force"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            kinvelx=0;
-            kinvely=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((kinvelx!=kinvelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(kinvelx)"+") :: "+("vec_set(in n: "+"kinvel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((kinvely!=kinvely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(kinvely)"+") :: "+("vec_set(in n: "+"kinvel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            svelx=0;
-            svely=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((svelx!=svelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(svelx)"+") :: "+("vec_set(in n: "+"svel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((svely!=svely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(svely)"+") :: "+("vec_set(in n: "+"svel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        angvel=torque=kinangvel=pre_rot=rot=0;
-        invalidate_pos();
-        invalidate_rot();
-        {
-            axisx=0;
-            axisy=1;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((axisx!=axisx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(axisx)"+") :: "+("vec_set(in n: "+"axis"+",in x: "+"0"+",in y: "+"1"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((axisy!=axisy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(axisy)"+") :: "+("vec_set(in n: "+"axis"+",in x: "+"0"+",in y: "+"1"+")");
-                #end
-            };
-        };
-        zip_axis=false;
-        massMode=ZPP_Flags.id_MassMode_DEFAULT;
-        gravMassMode=ZPP_Flags.id_GravMassMode_DEFAULT;
-        gravMassScale=1.0;
-        inertiaMode=ZPP_Flags.id_InertiaMode_DEFAULT;
-        norotate=false;
-        nomove=false;
-        graphic=null;
-        graphicUpdate=null;
-    }
-    public static function __static():Body{
-        var ret=new Body(BodyType.STATIC);
-        var si=ret.zpp_inner;
-        si.world=true;
-        si.wrap_shapes.zpp_inner.immutable=true;
-        si.smass=si.imass=si.cmass=si.mass=si.gravMass=0.0;
-        si.sinertia=si.iinertia=si.cinertia=si.inertia=0.0;
-        si.cbTypes.clear();
-        return ret;
-    }
-    private function aabb_validate(){
-        #if(!NAPE_RELEASE_BUILD)if(shapes.empty())throw "Error: bounds only makes sense when Body has shapes";
-        #end validate_aabb();
-    }
-    private function shapes_adder(s:Shape){
-        if(s.zpp_inner.body!=this){
-            if(s.zpp_inner.body!=null)s.zpp_inner.body.wrap_shapes.remove(s);
-            s.zpp_inner.body=this;
-            s.zpp_inner.addedToBody();
-            if(space!=null)space.added_shape(s.zpp_inner);
-            return true;
-        }
-        else return false;
-    }
-    private function shapes_subber(s:Shape){
-        if(space!=null)space.removed_shape(s.zpp_inner);
-        s.zpp_inner.body=null;
-        s.zpp_inner.removedFromBody();
-    }
-    private function shapes_invalidate(_){
-        invalidate_shapes();
-    }
-    #if(!NAPE_RELEASE_BUILD)private function shapes_modifiable(){
-        immutable_midstep("Body::shapes");
-        if(isStatic()&&space!=null)throw "Error: Cannot modifiy shapes of static object once added to Space";
-    }
-    #end public function new(){
-        super();
-        ibody=this;
-        world=false;
-        norotate=nomove=false;
-        {
-            posx=0;
-            posy=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((posx!=posx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(posx)"+") :: "+("vec_set(in n: "+"pos"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((posy!=posy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(posy)"+") :: "+("vec_set(in n: "+"pos"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        rot=0;
-        {
-            axisx=0;
-            axisy=1;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((axisx!=axisx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(axisx)"+") :: "+("vec_set(in n: "+"axis"+",in x: "+"0"+",in y: "+"1"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((axisy!=axisy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(axisy)"+") :: "+("vec_set(in n: "+"axis"+",in x: "+"0"+",in y: "+"1"+")");
-                #end
-            };
-        };
-        {
-            svelx=0;
-            svely=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((svelx!=svelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(svelx)"+") :: "+("vec_set(in n: "+"svel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((svely!=svely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(svely)"+") :: "+("vec_set(in n: "+"svel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            velx=0;
-            vely=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((velx!=velx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(velx)"+") :: "+("vec_set(in n: "+"vel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((vely!=vely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(vely)"+") :: "+("vec_set(in n: "+"vel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            kinvelx=0;
-            kinvely=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((kinvelx!=kinvelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(kinvelx)"+") :: "+("vec_set(in n: "+"kinvel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((kinvely!=kinvely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(kinvely)"+") :: "+("vec_set(in n: "+"kinvel"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            forcex=0;
-            forcey=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((forcex!=forcex));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(forcex)"+") :: "+("vec_set(in n: "+"force"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((forcey!=forcey));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(forcey)"+") :: "+("vec_set(in n: "+"force"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        torque=angvel=kinangvel=0;
-        {
-            pre_posx=ZPP_Const.POSINF();
-            pre_posy=ZPP_Const.POSINF();
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((pre_posx!=pre_posx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(pre_posx)"+") :: "+("vec_set(in n: "+"pre_pos"+",in x: "+"ZPP_Const.POSINF()"+",in y: "+"ZPP_Const.POSINF()"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((pre_posy!=pre_posy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(pre_posy)"+") :: "+("vec_set(in n: "+"pre_pos"+",in x: "+"ZPP_Const.POSINF()"+",in y: "+"ZPP_Const.POSINF()"+")");
-                #end
-            };
-        };
-        pre_rot=ZPP_Const.POSINF();
-        {
-            localCOMx=0;
-            localCOMy=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((localCOMx!=localCOMx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(localCOMx)"+") :: "+("vec_set(in n: "+"localCOM"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((localCOMy!=localCOMy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(localCOMy)"+") :: "+("vec_set(in n: "+"localCOM"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        {
-            worldCOMx=0;
-            worldCOMy=0;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((worldCOMx!=worldCOMx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(worldCOMx)"+") :: "+("vec_set(in n: "+"worldCOM"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((worldCOMy!=worldCOMy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(worldCOMy)"+") :: "+("vec_set(in n: "+"worldCOM"+",in x: "+"0"+",in y: "+"0"+")");
-                #end
-            };
-        };
-        zip_aabb=true;
-        aabb=ZPP_AABB.get(0,0,0,0);
-        aabb.immutable=true;
-        var me=this;
-        aabb._validate=aabb_validate;
-        massMode=ZPP_Flags.id_MassMode_DEFAULT;
-        gravMassMode=ZPP_Flags.id_GravMassMode_DEFAULT;
-        gravMassScale=1.0;
-        inertiaMode=ZPP_Flags.id_InertiaMode_DEFAULT;
-        arbiters=new ZNPList_ZPP_Arbiter();
-        constraints=new ZNPList_ZPP_Constraint();
-        shapes=new ZNPList_ZPP_Shape();
-        wrap_shapes=ZPP_ShapeList.get(shapes);
-        wrap_shapes.zpp_inner.adder=shapes_adder;
-        wrap_shapes.zpp_inner.subber=shapes_subber;
-        wrap_shapes.zpp_inner._invalidate=shapes_invalidate;
-        #if(!NAPE_RELEASE_BUILD)wrap_shapes.zpp_inner._modifiable=shapes_modifiable;
-        #end graphicOffset=Vec2.get(0,0);
-        graphicOffset.zpp_inner.inuse=true;
-    }
-    public function addedToSpace(){
-        {
-            #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                component==null;
-            };
-            if(!res)throw "assert("+"component==null"+") :: "+("already has a component?");
-            #end
-        };
-        component={
-            var ret:ZPP_Component;
-            if(ZPP_Component.zpp_pool==null){
-                ret=new ZPP_Component();
-                #if NAPE_POOL_STATS ZPP_Component.POOL_TOT++;
-                ZPP_Component.POOL_ADDNEW++;
-                #end
-            }
-            else{
-                ret=ZPP_Component.zpp_pool;
-                ZPP_Component.zpp_pool=ret.next;
-                ret.next=null;
-                #if NAPE_POOL_STATS ZPP_Component.POOL_CNT--;
-                ZPP_Component.POOL_ADD++;
-                #end
-            }
-            ret.alloc();
             ret;
-        };
-        component.isBody=true;
-        component.body=this;
-        __iaddedToSpace();
-    }
-    public function removedFromSpace(){
-        while(!arbiters.empty()){
-            var arb=arbiters.pop_unsafe();
-            arb.lazyRetire(space,this);
+        });
+        if(ret){
+            if(zpp_inner.subber!=null)zpp_inner.subber(obj);
+            if(!zpp_inner.dontremove)zpp_inner.inner.remove(obj.zpp_inner);
+            zpp_inner.invalidate();
         }
-        {
-            var o=component;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    o!=null;
-                };
-                if(!res)throw "assert("+"o!=null"+") :: "+("Free(in T: "+"ZPP_Component"+", in obj: "+"component"+")");
-                #end
-            };
-            o.free();
-            o.next=ZPP_Component.zpp_pool;
-            ZPP_Component.zpp_pool=o;
-            #if NAPE_POOL_STATS ZPP_Component.POOL_CNT++;
-            ZPP_Component.POOL_SUB++;
+        return ret;
+    }
+    #if swc@:keep#end
+ public function clear(){
+        #if(!NAPE_RELEASE_BUILD)if(zpp_inner.immutable)throw "Error: "+"Constraint"+"List is immutable";
+        #end
+ if(zpp_inner.reverse_flag){
+            while(!empty())pop();
+        }
+        else{
+            while(!empty())shift();
+        }
+    }
+    #if swc@:keep#end
+ public function empty(){
+        #if true if(false)return length==0;
+        else return zpp_inner.inner.empty();
+        #else return length==0;
+        #end
+
+    }
+    #if swc@:keep#end
+ public function iterator(){
+        #if true zpp_inner.valmod();
+        #else zpp_vm();
+        #end
+ if(zpp_inner.iterators==null)zpp_inner.iterators=new ZNPList_ConstraintIterator();
+        return ConstraintIterator.get(this);
+    }
+    #if swc@:keep#end
+ public function copy(?deep:Bool=false){
+        var ret=new ConstraintList();
+        for(i in this)ret.push(deep?{
+            #if(!NAPE_RELEASE_BUILD)throw "Error: "+"Constraint"+" is not a copyable type";
             #end
-        };
-        component=null;
-        __iremovedFromSpace();
-    }
-    public function copy(){
-        var ret=new Body().zpp_inner;
-        ret.type=type;
-        {
-            var cx_ite=shapes.begin();
-            while(cx_ite!=null){
-                var s=cx_ite.elem();
-                {
-                    var s2=Shape.copy(s.outer);
-                    ret.outer.shapes.add(s2);
-                };
-                cx_ite=cx_ite.next;
-            }
-        };
-        {
-            ret.posx=posx;
-            ret.posy=posy;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.posx!=ret.posx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.posx)"+") :: "+("vec_set(in n: "+"ret.pos"+",in x: "+"posx"+",in y: "+"posy"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.posy!=ret.posy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.posy)"+") :: "+("vec_set(in n: "+"ret.pos"+",in x: "+"posx"+",in y: "+"posy"+")");
-                #end
-            };
-        };
-        {
-            ret.velx=velx;
-            ret.vely=vely;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.velx!=ret.velx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.velx)"+") :: "+("vec_set(in n: "+"ret.vel"+",in x: "+"velx"+",in y: "+"vely"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.vely!=ret.vely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.vely)"+") :: "+("vec_set(in n: "+"ret.vel"+",in x: "+"velx"+",in y: "+"vely"+")");
-                #end
-            };
-        };
-        {
-            ret.forcex=forcex;
-            ret.forcey=forcey;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.forcex!=ret.forcex));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.forcex)"+") :: "+("vec_set(in n: "+"ret.force"+",in x: "+"forcex"+",in y: "+"forcey"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.forcey!=ret.forcey));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.forcey)"+") :: "+("vec_set(in n: "+"ret.force"+",in x: "+"forcex"+",in y: "+"forcey"+")");
-                #end
-            };
-        };
-        ret.rot=rot;
-        ret.angvel=angvel;
-        ret.torque=torque;
-        {
-            ret.kinvelx=kinvelx;
-            ret.kinvely=kinvely;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.kinvelx!=ret.kinvelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.kinvelx)"+") :: "+("vec_set(in n: "+"ret.kinvel"+",in x: "+"kinvelx"+",in y: "+"kinvely"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.kinvely!=ret.kinvely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.kinvely)"+") :: "+("vec_set(in n: "+"ret.kinvel"+",in x: "+"kinvelx"+",in y: "+"kinvely"+")");
-                #end
-            };
-        };
-        ret.kinangvel=kinangvel;
-        {
-            ret.svelx=svelx;
-            ret.svely=svely;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.svelx!=ret.svelx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.svelx)"+") :: "+("vec_set(in n: "+"ret.svel"+",in x: "+"svelx"+",in y: "+"svely"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.svely!=ret.svely));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.svely)"+") :: "+("vec_set(in n: "+"ret.svel"+",in x: "+"svelx"+",in y: "+"svely"+")");
-                #end
-            };
-        };
-        if(!zip_axis){
-            ret.axisx=axisx;
-            ret.axisy=axisy;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.axisx!=ret.axisx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.axisx)"+") :: "+("vec_set(in n: "+"ret.axis"+",in x: "+"axisx"+",in y: "+"axisy"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.axisy!=ret.axisy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.axisy)"+") :: "+("vec_set(in n: "+"ret.axis"+",in x: "+"axisx"+",in y: "+"axisy"+")");
-                #end
-            };
-        };
-        else ret.invalidate_rot();
-        ret.rot=rot;
-        ret.massMode=massMode;
-        ret.gravMassMode=gravMassMode;
-        ret.inertiaMode=inertiaMode;
-        if(!zip_mass)ret.mass=mass;
-        else ret.invalidate_mass();
-        if(!zip_gravMass)ret.gravMass=gravMass;
-        else ret.invalidate_gravMass();
-        if(!zip_gravMassScale)ret.gravMassScale=gravMassScale;
-        else ret.invalidate_gravMassScale();
-        if(!zip_inertia)ret.inertia=inertia;
-        else ret.invalidate_inertia();
-        if(!zip_aabb){
-            {
-                ret.aabb.minx=aabb.minx;
-                ret.aabb.miny=aabb.miny;
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((ret.aabb.minx!=ret.aabb.minx));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(ret.aabb.minx)"+") :: "+("vec_set(in n: "+"ret.aabb.min"+",in x: "+"aabb.minx"+",in y: "+"aabb.miny"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((ret.aabb.miny!=ret.aabb.miny));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(ret.aabb.miny)"+") :: "+("vec_set(in n: "+"ret.aabb.min"+",in x: "+"aabb.minx"+",in y: "+"aabb.miny"+")");
-                    #end
-                };
-            };
-            {
-                ret.aabb.maxx=aabb.maxx;
-                ret.aabb.maxy=aabb.maxy;
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((ret.aabb.maxx!=ret.aabb.maxx));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(ret.aabb.maxx)"+") :: "+("vec_set(in n: "+"ret.aabb.max"+",in x: "+"aabb.maxx"+",in y: "+"aabb.maxy"+")");
-                    #end
-                };
-                {
-                    #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                        !((ret.aabb.maxy!=ret.aabb.maxy));
-                    };
-                    if(!res)throw "assert("+"!assert_isNaN(ret.aabb.maxy)"+") :: "+("vec_set(in n: "+"ret.aabb.max"+",in x: "+"aabb.maxx"+",in y: "+"aabb.maxy"+")");
-                    #end
-                };
-            };
+ null;
         }
-        else ret.invalidate_aabb();
-        if(!zip_localCOM){
-            ret.localCOMx=localCOMx;
-            ret.localCOMy=localCOMy;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.localCOMx!=ret.localCOMx));
+        :i);
+        return ret;
+    }
+    #if swc@:keep#end
+ public function merge(xs:ConstraintList):Void{
+        #if(!NAPE_RELEASE_BUILD)if(xs==null)throw "Error: Cannot merge with null list";
+        #end
+ for(x in xs){
+            if(!has(x))add(x);
+        }
+    }
+    public function new(){
+        zpp_inner=new ZPP_ConstraintList();
+        zpp_inner.outer=this;
+    }
+    @:keep public function toString(){
+        var ret="[";
+        var fst=true;
+        for(i in this){
+            if(!fst)ret+=",";
+            ret+=(i==null?"NULL":i.toString());
+            fst=false;
+        }
+        return ret+"]";
+    }
+    #if swc@:keep#end
+ public function foreach(lambda:Constraint->Void){
+        #if(!NAPE_RELEASE_BUILD)if(lambda==null)throw "Error: Cannot execute null on list elements";
+        #end
+ var it=iterator();
+        while(it.hasNext()){
+            try{
+                lambda(it.next());
+            }
+            catch(e:Dynamic){
+                {
+                    it.zpp_next=ConstraintIterator.zpp_pool;
+                    ConstraintIterator.zpp_pool=it;
+                    it.zpp_inner.zpp_inner.iterators.remove(it);
+                    it.zpp_inner=null;
                 };
-                if(!res)throw "assert("+"!assert_isNaN(ret.localCOMx)"+") :: "+("vec_set(in n: "+"ret.localCOM"+",in x: "+"localCOMx"+",in y: "+"localCOMy"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.localCOMy!=ret.localCOMy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.localCOMy)"+") :: "+("vec_set(in n: "+"ret.localCOM"+",in x: "+"localCOMx"+",in y: "+"localCOMy"+")");
-                #end
-            };
-        };
-        else ret.invalidate_localCOM();
-        if(!zip_worldCOM){
-            ret.worldCOMx=worldCOMx;
-            ret.worldCOMy=worldCOMy;
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.worldCOMx!=ret.worldCOMx));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.worldCOMx)"+") :: "+("vec_set(in n: "+"ret.worldCOM"+",in x: "+"worldCOMx"+",in y: "+"worldCOMy"+")");
-                #end
-            };
-            {
-                #if(NAPE_ASSERT&&!NAPE_RELEASE_BUILD)var res={
-                    !((ret.worldCOMy!=ret.worldCOMy));
-                };
-                if(!res)throw "assert("+"!assert_isNaN(ret.worldCOMy)"+") :: "+("vec_set(in n: "+"ret.worldCOM"+",in x: "+"worldCOMx"+",in y: "+"worldCOMy"+")");
-                #end
-            };
-        };
-        else ret.invalidate_worldCOM();
-        copyto(ret.outer);
-        return ret.outer;
+                break;
+            }
+        }
+    }
+    #if swc@:keep#end
+ public function filter(lambda:Constraint->Bool):ConstraintList{
+        #if(!NAPE_RELEASE_BUILD)if(lambda==null)throw "Error: Cannot select elements of list with null";
+        #end
+ var i=0;
+        while(i<length){
+            var x=at(i);
+            try{
+                if(lambda(x))i++;
+                else{
+                    remove(x);
+                }
+            }
+            catch(e:Dynamic){
+                break;
+            }
+        }
+        return this;
     }
 }

@@ -7,20 +7,29 @@ module Parser
         Access,Expr,
         Catch,Case,VarExpr,FuncExpr,Param, 
         ClassTrait,Import,FileTrait,File,
-
+operator,
         -- * Functions
         parseFile -- :: String -> Either ParseError File
 
     ) where
 
 import System.Environment
-import Text.Parsec hiding (string)
+import Text.Parsec
 import qualified Text.Parsec.Token as P
 import Text.Parsec.Language
 import Text.Parsec.Expr
 import Control.Monad.State hiding (join)
 
 ----------------------------------------------------------------------------------------------
+
+operators = ["+","-","*","/","%",
+             "|","&","^","<<",">>",">>>",
+             "||","&&",
+             "==","!=",">","<",">=","<=",
+             "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
+             "!","~","++","--","?",":","..."]
+
+opletter = "!=<>?~-+*/^|&:%"
 
 langDef :: LanguageDef st
 langDef = emptyDef {
@@ -30,18 +39,13 @@ langDef = emptyDef {
     P.nestedComments = True,
     P.identStart = letter <|> char '_',
     P.identLetter = alphaNum <|> char '_',
-    P.opStart = oneOf "!=<>?~-+*/^|&:%",
-    P.opLetter = oneOf "!=<>?~-+*/^|&:%",
+    P.opStart = oneOf opletter,
+    P.opLetter = oneOf opletter,
     P.reservedNames = ["if","else","try","catch","throw","for","while","in","new",
                      "public","private","inline","override","static","do","cast",
                      "switch","case","var","function","class","extends","return",
                      "#if","#elseif","#else","#end"],
-    P.reservedOpNames = ["+","-","*","/","%",
-                       "|","&","^","<<",">>",">>>",
-                       "||","&&",
-                       "==","!=",">","<",">=","<=",
-                       "=","+=","-=","*=","/=","%=","|=","&=","^=","<<=",">>=",">>>=",
-                       "!","~","++","--","?",":","..."],
+    P.reservedOpNames = operators,
     P.caseSensitive = True
 }
 
@@ -61,11 +65,24 @@ dot    = lexeme $ P.dot        lexer
 colon  = lexeme $ P.colon      lexer
 
 reserved s = lexeme $ (P.reserved lexer) s
-operator s = lexeme $ (P.reservedOp lexer) s
 symbol   s = lexeme $ (P.symbol   lexer) s
 
 lexeme p      = do { res <- p; whiteSpace; return res }
 stringLiteral = P.stringLiteral lexer
+
+-- match a reserved operator s, and only if matched string does not make a prefix of a longer operator
+--operator s = lexeme $ (P.reservedOp lexer) s
+operator s
+    = lexeme $ try $ do { string s
+                  ; notFollowedBy prefixer }
+    where prefixer
+            = do { rest <- many1 $ oneOf opletter
+                 ; case (any ((flip elem) operators) $ fixes s rest) of
+                    True -> return ()
+                    False -> parserZero
+                 }
+          fixes xs [] = [xs]
+          fixes xs (y:ys) = let xsy = xs++[y] in xsy : (fixes xsy ys)
 
 -- ignore whitespace and metadata for lexemes
 whiteSpace    = let ws = P.whiteSpace lexer in ws>>many(metadata>>ws)
@@ -296,7 +313,7 @@ base_expr =  try (do { x <- ident; reserved "in"; e <- expr; return $ EIn x e })
                  ; cases1 <- many $ do { reserved "case"; m <- expr; colon; e <- expr; semi; return $ (m,e) }
                  ; symbol "}"
                  ; return $ ESwitch test (cases0++cases1) def })
-         <|> (fmap (EVars) $ (reserved "var") >> (many1 var_expr))
+         <|> (fmap (EVars) $ (reserved "var") >> (sepBy1 var_expr comma))
          <|> ((reserved "cast") >> (try (do { symbol "("; e <- expr; comma; t <- typep; symbol ")"; return $ ECast e (Just t) })
                                     <|> (do { e <- expr; return $ ECast e Nothing })))
          <?> "base expression"
