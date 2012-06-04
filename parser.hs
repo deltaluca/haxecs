@@ -44,7 +44,7 @@ langDef = emptyDef {
     P.reservedNames = ["if","else","try","catch","throw","for","while","in","new",
                      "public","private","inline","override","static","do","cast",
                      "switch","case","var","function","class","extends","return",
-                     "#if","#elseif","#else","#end"],
+                     "#if","#elseif","#else","#end","untyped","default"],
     P.reservedOpNames = operators,
     P.caseSensitive = True
 }
@@ -68,7 +68,17 @@ reserved s = lexeme $ (P.reserved lexer) s
 symbol   s = lexeme $ (P.symbol   lexer) s
 
 lexeme p      = do { res <- p; whiteSpace; return res }
-stringLiteral = P.stringLiteral lexer
+
+-- not as nice as the inbuilt one with escape chars. but need to allow newlines in strings!
+-- aswell as strings formed with '' instead of ""
+--stringLiteral = P.stringLiteral lexer
+stringLiteral
+	= lexeme $ do { strch <- oneOf "'\""
+				  ; dat <- many $ (do { x <- noneOf (strch : "\\"); return [x] })
+                              <|> (do { char '\\'; x <- noneOf ""; return ['\\',x] })
+				  ; char strch
+			      ; return $ (strch : (concat dat)) ++ [strch]
+				  }
 
 -- match a reserved operator s, and only if matched string does not make a prefix of a longer operator
 --operator s = lexeme $ (P.reservedOp lexer) s
@@ -152,15 +162,17 @@ data Expr = EConst Constant                     -- literal/ident
           | EThrow Expr                         -- throw Expr
           | ETry Expr [Catch]                   -- try Expr [Catch*]
           | ENew Type [Expr]                    -- new Type(Expr*)
-          | ESwitch Expr [Case] (Maybe Expr)    -- switch(Expr) { [Case*] [Def]? }
+          | ESwitch Expr [Case] (Maybe [Expr])    -- switch(Expr) { [Case*] [Def]? }
           | EVars [VarExpr]                     -- var VarExpr+
           | EFunction FuncExpr                  -- function FuncExpr
           | ECast Expr (Maybe Type)             -- cast expr or cast(expr,Type)
           | EPre (Pre [Expr])
+		  | EAnon [(Ident,Expr)]                -- { name : value, name : value ... }
+		  | EUntyped Expr                       -- untyped expr
           deriving (Show)
 
 type Catch    = (Ident,Type,Expr)                  -- (Ident : Type) Expr
-type Case     = (Expr,Expr)                        -- Expr: Expr ;
+type Case     = (Expr,[Expr])  	                   -- Expr: [Expr ;]
 type VarExpr  = (Ident,Maybe Type,Maybe Expr)      -- Ident [:Type]? [=Expr]?
 type FuncExpr = ([Param],Maybe Type,Expr)          -- (Params*) [:Type]? Expr
 type Param    = (Bool,VarExpr)                     -- ?? VarExpr
@@ -179,7 +191,7 @@ data Import    = SImport Package | PreImport (Pre [Import]) deriving (Show)
 
 data FileTrait = FImport Import
                | FTypeDef Type Type 
-               | FClass Ident (Maybe Type) [ClassTrait]
+               | FClass Type (Maybe Type) [ClassTrait]
                | FPre (Pre [FileTrait])
                deriving (Show)
 
@@ -197,13 +209,12 @@ postfix p = Postfix . chainl1 p $ return (flip (.))
 
 ----------------------------------------------------------------------------------------------
 
-pre_expr = chainl1 and_expr (do { symbol "||"; return PreOr })
-    where
-        and_expr = chainl1 not_expr (do { symbol "&&"; return PreAnd })
-        not_expr= try (do { symbol "!"; e <- pre_expr; return $ PreNot e })
-                  <|> base_expr
-                  <?> "Preprocessor expression"
-        base_expr = (parens pre_expr) <|> (fmap PreIdent ident) <?> "Preprocessor base expression"
+pre_expr = buildExpressionParser table base_expr <?> "preprocessor expression"
+	where 
+		table = [[prefix (do { operator "!"; return $ PreNot })],
+				 [Infix (do { operator "&&"; return PreAnd }) AssocLeft],
+				 [Infix (do { operator "||"; return PreOr  }) AssocLeft]]
+		base_expr = (parens pre_expr) <|> (fmap PreIdent ident) <?> "Preprocessor base expression"
 
 -- parse instances of 'a' wrapped in pre-processor condition statement
 -- eg: pre ident would parse things like #if 'condition' <<ident>>* #end
@@ -277,6 +288,9 @@ factor =  (fmap EConst constant)
       <|> (parens expr)
       <|> (fmap EArray $ brackets (sepBy expr comma))
       <|> (fmap EPre $ pre (many expr))
+      <|> (try $ do { reserved "cast"; symbol "("; e <- expr; comma; t <- typep; symbol ")"; return $ ECast e (Just t) })
+      <|> (do { reserved "new"; t <- typep; args <- parens $ sepBy expr comma; return $ ENew t args })
+      <|> (try $ (fmap EAnon) $ (braces.((flip sepBy1) comma)) $ do { name <- ident; colon; e <- expr; return (name,e) })
       <?> "factor expression"
 
 -- field access, function call, array access
@@ -288,7 +302,8 @@ factoring = do { x <- factor; rest x } <?> "factored expression"
                    <|> return x
 
 -- expression, or #if'ed expression ; #end style
-statement = try ((fmap EPre) $ pre (many statement))
+--statement = try ((fmap EPre) $ pre (many statement))
+statement = try (do { es <- pre (many statement); optional semi; return $ EPre es })
             <|> (do { e <- expr; optional semi; return e })
             <?> "statement"
 
@@ -302,8 +317,8 @@ base_expr =  try (do { x <- ident; reserved "in"; e <- expr; return $ EIn x e })
          <|> ((reserved "break"   )>>(return EBreak   ))
          <|> (do { reserved "for"; it <- parens expr; e <- expr; return $ EFor it e })
          <|> (fmap (EReturn) $ (reserved "return") >> (optionMaybe expr))
-         <|> (do { reserved "if"; cond <- parens expr; e <- expr; optional semi;
-                 ; elsee <- optionMaybe $ (reserved "else") >> expr
+         <|> (do { reserved "if"; cond <- parens expr; e <- expr;
+				 ; elsee <- ( try $ do { optional semi; reserved "else"; e <- expr; return $ Just e }) <|> (return Nothing)
                  ; return $ EIf cond e elsee })
          <|> (fmap (EThrow) $ (reserved "throw") >> expr)
          <|> (do { reserved "try"; test <- expr;
@@ -313,17 +328,16 @@ base_expr =  try (do { x <- ident; reserved "in"; e <- expr; return $ EIn x e })
                                         ; return $ (name,typee,e)
                                         }
                  ; return $ ETry test catches })
-         <|> (do { reserved "new"; t <- typep; args <- parens $ sepBy expr comma; return $ ENew t args })
          <|> (fmap (EFunction) $ (reserved "function") >> func_expr)
-         <|> (do { reserved "switch"; test <- expr; symbol "{"
-                 ; cases0 <- many $ do { reserved "case"; m <- expr; colon; e <- expr; semi; return $ (m,e) }
-                 ; def <- optionMaybe $ do { reserved "default"; colon; e <- expr; semi; return e }
-                 ; cases1 <- many $ do { reserved "case"; m <- expr; colon; e <- expr; semi; return $ (m,e) }
+         <|> (do { reserved "switch"; test <- parens expr; symbol "{"
+                 ; cases0 <- many $ do { reserved "case"; m <- expr; colon; e <- many statement; return (m,e) }
+                 ; def <- optionMaybe $ do { reserved "default";     colon; e <- many statement; return e }
+                 ; cases1 <- many $ do { reserved "case"; m <- expr; colon; e <- many statement; return (m,e) }
                  ; symbol "}"
                  ; return $ ESwitch test (cases0++cases1) def })
          <|> (fmap (EVars) $ (reserved "var") >> (sepBy1 var_expr comma))
-         <|> ((reserved "cast") >> (try (do { symbol "("; e <- expr; comma; t <- typep; symbol ")"; return $ ECast e (Just t) })
-                                    <|> (do { e <- expr; return $ ECast e Nothing })))
+         <|> (do { reserved "cast"; e <- expr; return $ ECast e Nothing })
+		 <|> (do { reserved "untyped"; e <- expr; return $ EUntyped e })
          <?> "base expression"
 
 -- variable expression
@@ -387,7 +401,7 @@ ctrait = (do { as <- many accessor
 class_trait = (try ctrait) <|> (fmap CPre $ pre (many class_trait))
 
 classp = (do { reserved "class";
-             ; name <- ident
+             ; name <- typep
              ; super <- optionMaybe $ (reserved "extends") >> typep
              ; symbol "{"
              ; traits <- many class_trait
@@ -395,8 +409,11 @@ classp = (do { reserved "class";
              ; return $ FClass name super traits })
           <?> "class declaration"
 
-file_trait = (foldl1 (<|>) [fmap FImport importp, typedef, classp, fmap FPre $ pre (many file_trait)])
-            <?> "file trait"
+file_trait =  classp
+          <|> typedef
+          <|> try (fmap FImport importp)
+          <|> (fmap FPre $ pre (many file_trait))
+          <?> "file trait"
 
 file = (do { p <- option "" package
            ; traits <- many file_trait
