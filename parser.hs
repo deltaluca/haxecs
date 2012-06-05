@@ -1,12 +1,28 @@
 module Parser
     (
         -- * AST data types
-        Pre, PreExpr,
-        Type,Ident,Package,
-        Constant,Binop,Unop,UnopFlag,
-        Access,Expr,
-        Catch,Case,VarExpr,FuncExpr,Param, 
-        ClassTrait,Import,FileTrait,File,
+		Pre,
+		PreExpr(PreIdent,PreAnd,PreOr,PreNot),
+		Type(BasicType,ParamType,PreType,FuncType),
+		Ident,
+		Package,
+		Constant(CInt,CFloat,CString,CIdent),
+		Binop(OpAdd,OpMul,OpDiv,OpSub,OpMod,OpAssign,OpEq,OpNeq,OpGt,OpLt,OpGeq,OpLeq,OpOr,OpAnd,OpXor,OpBoolAnd,OpBoolOr,OpShl,OpShr,OpUShr,OpAssignOp,OpInterval),
+		Unop(OpInc,OpDec,OpNot,OpNeg,OpNegBits),
+		UnopFlag(FlagPre,FlagPost),
+		Expr(EConst,EArray,EArrayAccess,EBlock,EUnop,EBinop,ETernary,EWhile,EFor,EReturn,EIn,EIf,EField,EContinue,EBreak,ECall,EThrow,ETry,ENew,ESwitch,EVars,EFunction,ECast,EPre1,EPreN,EAnon,EUntyped),
+		Catch,
+		Case,
+		VarExpr,
+		FuncExpr,
+		Param,
+		TraitInfo(Member,Method,Property),
+		CTrait,
+		ClassTrait(CTrait,CPre),
+		Access(APublic,APrivate,AStatic,AOverride,AInline,APre),
+		Import,
+		FileTrait(FImport,FTypeDef,FClass,FPre),
+		File,
 
         -- * Functions
         parseFile -- :: String -> Either ParseError File
@@ -166,9 +182,10 @@ data Expr = EConst Constant                     -- literal/ident
           | EVars [VarExpr]                     -- var VarExpr+
           | EFunction FuncExpr                  -- function FuncExpr
           | ECast Expr (Maybe Type)             -- cast expr or cast(expr,Type)
-          | EPre (Pre [Expr])
-		  | EAnon [(Ident,Expr)]                -- { name : value, name : value ... }
-		  | EUntyped Expr                       -- untyped expr
+          | EPre1 (Pre Expr)   -- expression
+          | EPreN (Pre [Expr]) -- statement
+          | EAnon [(Ident,Expr)]                -- { name : value, name : value ... }
+          | EUntyped Expr                       -- untyped expr
           deriving (Show)
 
 type Catch    = (Ident,Type,Expr)                  -- (Ident : Type) Expr
@@ -187,7 +204,7 @@ data ClassTrait = CTrait [Access] TraitInfo
                 | CPre (Pre [ClassTrait])
                 deriving (Show)
 
-data Import    = SImport Package | PreImport (Pre [Import]) deriving (Show)
+type Import = String
 
 data FileTrait = FImport Import
                | FTypeDef Type Type 
@@ -287,7 +304,7 @@ low_expr = buildExpressionParser table base_expr <?> "small expression"
 factor =  (fmap EConst constant)
       <|> (parens expr)
       <|> (fmap EArray $ brackets (sepBy expr comma))
-      <|> (fmap EPre $ pre (many expr))
+      <|> (fmap EPre1 $ pre expr)
       <|> (try $ do { reserved "cast"; symbol "("; e <- expr; comma; t <- typep; symbol ")"; return $ ECast e (Just t) })
       <|> (do { reserved "new"; t <- typep; args <- parens $ sepBy expr comma; return $ ENew t args })
       <|> (try $ (fmap EAnon) $ (braces.((flip sepBy1) comma)) $ do { name <- ident; colon; e <- expr; return (name,e) })
@@ -303,7 +320,7 @@ factoring = do { x <- factor; rest x } <?> "factored expression"
 
 -- expression, or #if'ed expression ; #end style
 --statement = try ((fmap EPre) $ pre (many statement))
-statement = try (do { es <- pre (many statement); optional semi; return $ EPre es })
+statement = try (do { es <- pre (many statement); optional semi; return $ EPreN es })
             <|> (do { e <- expr; optional semi; return e })
             <?> "statement"
 
@@ -382,8 +399,7 @@ package = (do { reserved "package";
 importp = (do { reserved "import";
               ; name <- (fmap (join ".")) (sepBy ident dot);
               ; semi
-              ; return $ SImport name })
-          <|> (fmap PreImport $ (pre $ many importp))
+              ; return $ name })
           <?> "import declaration"
 
 ctrait = (do { as <- many accessor
