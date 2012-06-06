@@ -71,7 +71,8 @@ parens p      = lexeme $ do { char '('; whiteSpace; res <- lexeme p; char ')'; r
 brackets p    = lexeme $ do { char '['; whiteSpace; res <- lexeme p; char ']'; return res; }
 angles p      = lexeme $ do { char '<'; whiteSpace; res <- lexeme p; char '>'; return res; }
 braces p      = lexeme $ do { char '{'; whiteSpace; res <- lexeme p; char '}'; return res; }
-integer       = do { x <- lexeme $ (P.integer lexer) <|> (P.hexadecimal lexer); return $ fromIntegral x }
+
+integer = liftM fromIntegral (lexeme (P.integer lexer) <|> P.hexadecimal lexer)
 
 ident  = lexeme $ P.identifier lexer
 float  = lexeme $ P.float      lexer
@@ -80,8 +81,8 @@ comma  = lexeme $ P.comma      lexer
 dot    = lexeme $ P.dot        lexer
 colon  = lexeme $ P.colon      lexer
 
-reserved s = lexeme $ (P.reserved lexer) s
-symbol   s = lexeme $ (P.symbol   lexer) s
+reserved = lexeme . P.reserved lexer
+symbol   = lexeme . P.symbol   lexer
 
 lexeme p      = do { res <- p; whiteSpace; return res }
 
@@ -93,7 +94,7 @@ stringLiteral
 				  ; dat <- many $ (do { x <- noneOf (strch : "\\"); return [x] })
                               <|> (do { char '\\'; x <- noneOf ""; return ['\\',x] })
 				  ; char strch
-			      ; return $ (strch : (concat dat)) ++ [strch]
+			      ; return $ (strch : concat dat) ++ [strch]
 				  }
 
 -- match a reserved operator s, and only if matched string does not make a prefix of a longer operator
@@ -103,12 +104,11 @@ operator s
                   ; notFollowedBy prefixer }
     where prefixer
             = do { rest <- many1 $ oneOf opletter
-                 ; case (any ((flip elem) operators) $ fixes s rest) of
-                    True -> return ()
-                    False -> parserZero
+                 ; unless (any (flip elem operators) $ fixes s rest) parserZero
+--                 ; if any (flip elem operators) $ fixes s rest then return () else parserZero
                  }
           fixes xs [] = [xs]
-          fixes xs (y:ys) = let xsy = xs++[y] in xsy : (fixes xsy ys)
+          fixes xs (y:ys) = let xsy = xs++[y] in xsy : fixes xsy ys
 
 -- ignore whitespace and metadata for lexemes
 whiteSpace    = let ws = P.whiteSpace lexer in ws>>many(metadata>>ws)
@@ -226,23 +226,23 @@ postfix p = Postfix . chainl1 p $ return (flip (.))
 
 ----------------------------------------------------------------------------------------------
 
-pre_expr = buildExpressionParser table base_expr <?> "preprocessor expression"
-	where 
-		table = [[prefix (do { operator "!"; return $ PreNot })],
-				 [Infix (do { operator "&&"; return PreAnd }) AssocLeft],
-				 [Infix (do { operator "||"; return PreOr  }) AssocLeft]]
-		base_expr = (parens pre_expr) <|> (fmap PreIdent ident) <?> "Preprocessor base expression"
+preExpr = buildExpressionParser table baseExpr <?> "preprocessor expression"
+    where 
+        table = [[prefix $ operator "!" >> return PreNot],
+                 [Infix (operator "&&" >> return PreAnd) AssocLeft],
+                 [Infix (operator "||" >> return PreOr) AssocLeft]]
+        baseExpr = parens preExpr <|> liftM PreIdent ident <?> "Preprocessor base expression"
 
 -- parse instances of 'a' wrapped in pre-processor condition statement
 -- eg: pre ident would parse things like #if 'condition' <<ident>>* #end
-pre a = (do { reserved "#if"; cond <- pre_expr
+pre a = (do { reserved "#if"; cond <- preExpr
            ; x <- a
-           ; elses <- many $ do { reserved "#elseif"; cond <- pre_expr
+           ; elses <- many $ do { reserved "#elseif"; cond <- preExpr
                                 ; x <- a
                                 ; return (cond,x) }
-           ; elsec <- optionMaybe $ (reserved "#else") >> a
+           ; elsec <- optionMaybe $ reserved "#else" >> a
            ; reserved "#end"
-           ; return $ (cond,x,elses,elsec) })
+           ; return (cond,x,elses,elsec) })
         <?> "Preprocessor statement"
 
 ----------------------------------------------------------------------------------------------
@@ -253,21 +253,21 @@ constant =      do { x <- stringLiteral; return $ CString x }
        <|>      do { x <- integer;       return $ CInt    x }
        <?> "constant"
 
-typep = chainr1 base_type (do { operator "->"; return FuncType })
+typep = chainr1 baseType (do { operator "->"; return FuncType })
     where
-        factor_type = ((fmap BasicType) $ (fmap (join ".")) (sepBy1 ident dot))
-                   <|> (parens typep)
-                   <|> (fmap PreType $ pre (typep))
+        factorType = liftM (BasicType . join ".") (sepBy1 ident dot)
+                   <|> parens typep
+                   <|> liftM PreType (pre typep)
                    <?> "factor type"
-        base_type = do { x <- factor_type; rest x } <?> "factored type"
-            where rest x = (do { y <- (fmap (ParamType x) $ angles (sepBy1 typep comma))
+        baseType = factorType >>= rest <?> "factored type"
+            where rest x = (do { y <- (liftM (ParamType x) $ angles (sepBy1 typep comma))
                                ; rest y })
                         <|>  return x
 
 ----------------------------------------------------------------------------------------------
 
 -- all expressions
-expr = (chainr1 tur_expr $ choice [
+expr = chainr1 turExpr (choice [
          (do { operator "="; return $ EBinop OpAssign }),
          op "+="  OpAdd, op "-="  OpSub, op "/="   OpDiv, op "*=" OpMul, op "%=" OpMod,
          op "<<=" OpShl, op ">>=" OpShr, op ">>>=" OpUShr,
@@ -277,12 +277,12 @@ expr = (chainr1 tur_expr $ choice [
     where op s x = do { operator s; return $ EBinop (OpAssignOp x) }
 
 -- expressions up to and including ?: ternary operator
-tur_expr = do { x <- low_expr; rest x } <?> "ternary expression"
-    where rest x = (do { symbol "?"; y <- tur_expr; colon; z <- tur_expr; rest $ ETernary x y z })
-                   <|> (return x)
+turExpr = lowExpr >>= rest <?> "ternary expression"
+    where rest x = (do { symbol "?"; y <- turExpr; colon; z <- turExpr; rest $ ETernary x y z })
+                   <|> return x
 
 -- expressions for precedences up to the ?: ternary operator.
-low_expr = buildExpressionParser table base_expr <?> "small expression"
+lowExpr = buildExpressionParser table baseExpr <?> "small expression"
     where
         table = [[unop "-" Prefix FlagPre OpNeg, unop "~" Prefix FlagPre OpNegBits, unop "!" Prefix FlagPre OpNot,
                     unop "++" Prefix FlagPre OpInc, unop "--" Prefix FlagPre OpDec,
@@ -301,87 +301,87 @@ low_expr = buildExpressionParser table base_expr <?> "small expression"
         binop s op = Infix (do { operator s; return $ EBinop op }) AssocLeft
 
 -- const, bracketed expression, array literal
-factor =  (fmap EConst constant)
-      <|> (parens expr)
-      <|> (fmap EArray $ brackets (sepBy expr comma))
-      <|> (fmap EPre1 $ pre expr)
-      <|> (try $ do { reserved "cast"; symbol "("; e <- expr; comma; t <- typep; symbol ")"; return $ ECast e (Just t) })
+factor =  liftM EConst constant
+      <|> parens expr
+      <|> liftM EArray (brackets (sepBy expr comma))
+      <|> liftM EPre1 (pre expr)
+      <|> try (do { reserved "cast"; symbol "("; e <- expr; comma; t <- typep; symbol ")"; return $ ECast e (Just t) })
       <|> (do { reserved "new"; t <- typep; args <- parens $ sepBy expr comma; return $ ENew t args })
-      <|> (try $ (fmap EAnon) $ (braces.((flip sepBy1) comma)) $ do { name <- ident; colon; e <- expr; return (name,e) })
+      <|> try (liftM EAnon $ (braces . flip sepBy1 comma) $ do { name <- ident; colon; e <- expr; return (name,e) })
       <?> "factor expression"
 
 -- field access, function call, array access
-factoring = do { x <- factor; rest x } <?> "factored expression"
-    where rest x = (do { y <- try (fmap (EField x) $ dot >> ident)
-                           <|> (fmap (ECall x) $ parens (sepBy expr comma))
-                           <|> (fmap (EArrayAccess x) $ brackets expr)
+factoring = factor >>= rest <?> "factored expression"
+    where rest x = (do { y <- try (liftM (EField x) $ dot >> ident)
+                           <|> liftM (ECall x) (parens (sepBy expr comma))
+                           <|> liftM (EArrayAccess x) (brackets expr)
                       ; rest y })
                    <|> return x
 
 -- expression, or #if'ed expression ; #end style
---statement = try ((fmap EPre) $ pre (many statement))
+--statement = try ((liftM EPre) $ pre (many statement))
 statement = try (do { es <- pre (many statement); optional semi; return $ EPreN es })
             <|> (do { e <- expr; optional semi; return e })
             <?> "statement"
 
 -- basic expressions
-base_expr =  try (do { x <- ident; reserved "in"; e <- expr; return $ EIn x e })
+baseExpr =  try (do { x <- ident; reserved "in"; e <- expr; return $ EIn x e })
          <|> try factoring
-         <|> (fmap (EBlock) $ braces (many statement)) 
+         <|> liftM EBlock (braces (many statement))
          <|> (do { reserved "while"; cond <- parens expr; e <- expr; return $ EWhile True cond e })
          <|> (do { reserved "do"; e <- expr; reserved "while"; cond <- parens expr; return $ EWhile False cond e })
-         <|> ((reserved "continue")>>(return EContinue))
-         <|> ((reserved "break"   )>>(return EBreak   ))
+         <|> (reserved "continue" >> return EContinue)
+         <|> (reserved "break"    >> return EBreak   )
          <|> (do { reserved "for"; it <- parens expr; e <- expr; return $ EFor it e })
-         <|> (fmap (EReturn) $ (reserved "return") >> (optionMaybe expr))
+         <|> liftM EReturn (reserved "return" >> optionMaybe expr)
          <|> (do { reserved "if"; cond <- parens expr; e <- expr;
-				 ; elsee <- ( try $ do { optional semi; reserved "else"; e <- expr; return $ Just e }) <|> (return Nothing)
+				 ; elsee <- try (do { optional semi; reserved "else"; e <- expr; return $ Just e }) <|> return Nothing
                  ; return $ EIf cond e elsee })
-         <|> (fmap (EThrow) $ (reserved "throw") >> expr)
+         <|> liftM EThrow (reserved "throw" >> expr)
          <|> (do { reserved "try"; test <- expr;
                  ; catches <- many $ do { reserved "catch"
                                         ; symbol "("; name <- ident; colon; typee <- typep; symbol ")"
                                         ; e <- expr
-                                        ; return $ (name,typee,e)
+                                        ; return (name,typee,e)
                                         }
                  ; return $ ETry test catches })
-         <|> (fmap (EFunction) $ (reserved "function") >> func_expr)
+         <|> liftM EFunction (reserved "function" >> funcExpr)
          <|> (do { reserved "switch"; test <- parens expr; symbol "{"
                  ; cases0 <- many $ do { reserved "case"; m <- expr; colon; e <- many statement; return (m,e) }
-                 ; def <- optionMaybe $ do { reserved "default";     colon; e <- many statement; return e }
+                 ; def <- optionMaybe $ do { reserved "default";     colon; many statement }
                  ; cases1 <- many $ do { reserved "case"; m <- expr; colon; e <- many statement; return (m,e) }
                  ; symbol "}"
                  ; return $ ESwitch test (cases0++cases1) def })
-         <|> (fmap (EVars) $ (reserved "var") >> (sepBy1 var_expr comma))
+         <|> liftM EVars (reserved "var" >> sepBy1 varExpr comma)
          <|> (do { reserved "cast"; e <- expr; return $ ECast e Nothing })
 		 <|> (do { reserved "untyped"; e <- expr; return $ EUntyped e })
          <?> "base expression"
 
 -- variable expression
-var_expr = do { name <- ident
+varExpr = do { name <- ident
               ; typee <- optionMaybe $ colon >> typep
-              ; value <- optionMaybe $ (symbol "=") >> expr
-              ; return $ (name,typee,value)
+              ; value <- optionMaybe $ symbol "=" >> expr
+              ; return (name,typee,value)
               }
 
 -- function expression
-func_expr = do { params <- parens $ sepBy param comma;
+funcExpr = do { params <- parens (sepBy param comma);
                ; typee <- optionMaybe $ colon >> typep
                ; e <- expr
-               ; return $ (params,typee,e)
+               ; return (params,typee,e)
                }
-    where param = do { opt <- option False $ (symbol "?")>>(return True)
-                     ; vare <- var_expr
-                     ; return $ (opt,vare)
+    where param = do { opt <- option False $ symbol "?">>return True
+                     ; vare <- varExpr
+                     ; return (opt,vare)
                      }
 
 ----------------------------------------------------------------------------------------------
 
-accessor = (foldl1 (<|>) $ map (\(x,y) -> (reserved x) >> (return y)) $ [
+accessor = choice (map (\(x,y) -> reserved x >> return y) [
                 ("public",APublic), ("private",APrivate), ("inline",AInline),
                 ("override",AOverride), ("static",AStatic)
            ])
-           <|> (fmap APre $ (pre $ many accessor))
+           <|> liftM APre (pre (many accessor))
            <?> "access modifier"
 
 typedef = (do { reserved "typedef"
@@ -391,48 +391,48 @@ typedef = (do { reserved "typedef"
          <?> "typedef"
 
 package = (do { reserved "package";
-              ; name <- (fmap (join ".")) (sepBy ident dot);
+              ; name <- liftM (join ".") (sepBy ident dot);
               ; semi
               ; return name })
           <?> "package declaration"
 
 importp = (do { reserved "import";
-              ; name <- (fmap (join ".")) (sepBy ident dot);
+              ; name <- liftM (join ".") (sepBy ident dot);
               ; semi
-              ; return $ name })
+              ; return name })
           <?> "import declaration"
 
 ctrait = (do { as <- many accessor
-             ; trait <- try (do { reserved "var"; v <- var_expr; semi; return $ Member v })
-                        <|> (do { reserved "function"; name <- fname; f <-func_expr; return $ Method name f })
+             ; trait <- try (do { reserved "var"; v <- varExpr; semi; return $ Member v })
+                        <|> (do { reserved "function"; name <- fname; f <-funcExpr; return $ Method name f })
                         <|> (do { reserved "var"; name <-ident
                                 ; symbol "("; get <- ident; comma; set <- ident; symbol ")"
                                 ; colon ; t <- typep; semi
                                 ; return $ Property name get set t })
              ; return $ CTrait as trait })
          <?> "class trait"
-    where fname = (try ident) <|> do { reserved "new"; return "new" } 
+    where fname = try ident <|> (reserved "new" >> return "new")
  
 
-class_trait = (try ctrait) <|> (fmap CPre $ pre (many class_trait))
+classTrait = try ctrait <|> liftM CPre (pre (many classTrait))
 
 classp = (do { reserved "class";
              ; name <- typep
-             ; super <- optionMaybe $ (reserved "extends") >> typep
+             ; super <- optionMaybe $ reserved "extends" >> typep
              ; symbol "{"
-             ; traits <- many class_trait
+             ; traits <- many classTrait
              ; symbol "}"
              ; return $ FClass name super traits })
           <?> "class declaration"
 
-file_trait =  classp
+fileTrait =  classp
           <|> typedef
-          <|> try (fmap FImport importp)
-          <|> (fmap FPre $ pre (many file_trait))
+          <|> try (liftM FImport importp)
+          <|> liftM FPre (pre (many fileTrait))
           <?> "file trait"
 
 file = (do { p <- option "" package
-           ; traits <- many file_trait
+           ; traits <- many fileTrait
            ; return (p,traits)
            })
       <?> "file"

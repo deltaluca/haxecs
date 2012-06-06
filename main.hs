@@ -10,9 +10,9 @@ import Control.Monad.Writer
 
 main = do
     args <- getArgs
-    file <- parseFile (args !! 0)
-    case(file) of
-        Left err -> putStrLn $ "...................fail " ++ (show err)
+    file <- parseFile (head args)
+    case file of
+        Left err -> putStrLn $ "...................fail " ++ show err
         Right val -> do
             putStrLn $ printAST val
             putStrLn "-----"

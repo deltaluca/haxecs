@@ -6,6 +6,7 @@ import Parser
 import Control.Monad.Writer hiding (tell)
 import qualified Control.Monad.Writer as W (tell)
 import Control.Monad.State
+import Control.Arrow
 import Data.List
 
 printAST file = snd $ runWriter (runStateT (writeAST file) (True,0)) 
@@ -13,135 +14,135 @@ printAST file = snd $ runWriter (runStateT (writeAST file) (True,0))
 writeAST (pckg,traits) = do
     tellLn $ "package " ++ pckg ++ ";"
     nl
-    sequence_ $ map tellFTrait traits
+    mapM_ tellFTrait traits
 
 tellFTrait (FImport pckg) = tellLn $ "import " ++ pckg ++ ";"
-tellFTrait (FTypeDef x y) = do { tell "typedef "; tell_type x; tell "="; tell_type y; tellLn ";" }
-tellFTrait (FPre pre) = (tell_pre (mapM_ tellFTrait) pre) >> nl
+tellFTrait (FTypeDef x y) = do { tell "typedef "; tellType x; tell "="; tellType y; tellLn ";" }
+tellFTrait (FPre pre) = tellPre (mapM_ tellFTrait) pre >> nl
 tellFTrait (FClass x s traits) = do 
-    tell "class "; tell_type x
-    maybeTell ((tell " extends " >>) . tell_type) s
+    tell "class "; tellType x
+    maybeTell ((tell " extends " >>) . tellType) s
     tell " "; openScope
     mapM_ tellCTrait traits
     closeScope
 
-tellCTrait (CPre pre) = (tell_pre (mapM_ tellCTrait) pre)
+tellCTrait (CPre pre) = tellPre (mapM_ tellCTrait) pre
 tellCTrait (CTrait as tinfo) = do
     mapM_ ((>> tell " ") . tellMember) as
     tellTInfo tinfo
     where
-        tellMember x = case(x) of
+        tellMember x = case x of
             APublic   -> tell "public"
             APrivate  -> tell "private"
             AStatic   -> tell "static"
             AOverride -> tell "override"
             AInline   -> tell "inline"
-            APre pre  -> (tell_pre (mapM_ tellMember) pre)
+            APre pre  -> (tellPre (mapM_ tellMember) pre)
 
-tellTInfo (Member var) = do { tell "var "; tell_var var; tellLn ";" }
+tellTInfo (Member var) = do { tell "var "; tellVar var; tellLn ";" }
 tellTInfo (Method n f) = do
     tell $ "function " ++ n
-    tell_fexpr f
+    tellFExpr f
 tellTInfo (Property n g s t) = do
     tell $ "var " ++ n ++ "(" ++ g ++ "," ++ s ++ ")" ++ ":"
-    tell_type t
+    tellType t
     tellLn ";"
 
-tell_fexpr (ps,t,e) = do
+tellFExpr (ps,t,e) = do
     tell "("
-    sequence_ $ intersperse (tell ", ") $ map tell_param ps
+    sequence_ $ intersperse (tell ", ") $ map tellParam ps
     tell ")"
-    maybeTell ((tell ":" >>) . tell_type) t
-    tell_expr e
+    maybeTell ((tell ":" >>) . tellType) t
+    tellExpr e
 
-tell_param (opt,var) = (when opt $ tell "?") >> tell_var var
-tell_var (n,t,v) = do
+tellParam (opt,var) = when opt (tell "?") >> tellVar var
+tellVar (n,t,v) = do
     tell n
-    maybeTell ((tell ":" >>) . tell_type) t
-    maybeTell ((tell " = " >>) . tell_expr) v 
+    maybeTell ((tell ":" >>) . tellType) t
+    maybeTell ((tell " = " >>) . tellExpr) v 
 
 -----------------------------------------------
 
-tell_expr (EConst (CInt x)) = tell $ show x
-tell_expr (EConst (CFloat x)) = tell $ show x
-tell_expr (EConst (CString x)) = tell x
-tell_expr (EConst (CIdent x)) = tell x
+tellExpr (EConst (CInt x)) = tell $ show x
+tellExpr (EConst (CFloat x)) = tell $ show x
+tellExpr (EConst (CString x)) = tell x
+tellExpr (EConst (CIdent x)) = tell x
 
-tell_expr (EArray xs) = do
+tellExpr (EArray xs) = do
     tell "["
-    sequence_ $ intersperse (tell ", ") $ map tell_expr xs
+    sequence_ $ intersperse (tell ", ") $ map tellExpr xs
     tell "]"
-tell_expr (EBlock xs) = do
+tellExpr (EBlock xs) = do
     openScope
-    mapM_ ((>> tell ";") . tell_expr) xs
+    mapM_ ((>> tell ";") . tellExpr) xs
     closeScope;
-tell_expr (EVars vs) = do
+tellExpr (EVars vs) = do
     tell "var "
-    sequence_ $ intersperse (tell ", ") $ map tell_var vs
-tell_expr (EArrayAccess x y) = do { tell_expr x; tell "["; tell_expr y; tell "]" }
-tell_expr (EUnop op flag e) = (tell "(") >> (case flag of
-    FlagPre  -> (tell $ show_unop op) >> (tell_expr e)
-    FlagPost -> (tell_expr e) >> (tell $ show_unop op) ) >> (tell ")")
-tell_expr (EBinop op x y) = do { tell "("; tell_expr x; tell $ show_op op; tell_expr y; tell ")" }
-tell_expr (ETernary x y z) = do { tell "("; tell_expr x; tell "?"; tell_expr y; tell ":"; tell_expr z; tell ")" }
-tell_expr (EReturn x) = do
+    sequence_ $ intersperse (tell ", ") $ map tellVar vs
+tellExpr (EArrayAccess x y) = do { tellExpr x; tell "["; tellExpr y; tell "]" }
+tellExpr (EUnop op flag e) = tell "(" >> (case flag of
+    FlagPre  -> tell (showUnop op) >> tellExpr e
+    FlagPost -> tellExpr e >> tell (showUnop op) ) >> tell ")"
+tellExpr (EBinop op x y) = do { tell "("; tellExpr x; tell $ showOp op; tellExpr y; tell ")" }
+tellExpr (ETernary x y z) = do { tell "("; tellExpr x; tell "?"; tellExpr y; tell ":"; tellExpr z; tell ")" }
+tellExpr (EReturn x) = do
     tell "return "
-    maybeTell tell_expr x
-tell_expr (EIn x y) = do { tell "("; tell $ x ++ " in "; tell_expr y; tell ")" }
-tell_expr (EContinue) = tell "continue"
-tell_expr (EBreak) = tell "break"
-tell_expr (EThrow x) = (tell "throw ") >> (tell_expr x)
-tell_expr (EPre1 pre) = tell_pre tell_expr pre
-tell_expr (EPreN pre) = tell_pre (sequence_ . intersperse (tellLn ";") . map tell_expr) pre
-tell_expr (EUntyped e) = do { tell "(untyped "; tell_expr e; tell ")" }
-tell_expr (EAnon xs) = do
+    maybeTell tellExpr x
+tellExpr (EIn x y) = do { tell "("; tell $ x ++ " in "; tellExpr y; tell ")" }
+tellExpr (EContinue) = tell "continue"
+tellExpr (EBreak) = tell "break"
+tellExpr (EThrow x) = tell "throw " >> tellExpr x
+tellExpr (EPre1 pre) = tellPre tellExpr pre
+tellExpr (EPreN pre) = tellPre (sequence_ . intersperse (tellLn ";") . map tellExpr) pre
+tellExpr (EUntyped e) = do { tell "(untyped "; tellExpr e; tell ")" }
+tellExpr (EAnon xs) = do
     tell "({"
     sequence_ $ intersperse (tell ", ") $ map f xs
     tell "})"
-    where f (n,e) = (tell $ n ++ ":") >> (tell_expr e)
-tell_expr (ECast x Nothing) = do { tell "(cast "; tell_expr x; tell ")" }
-tell_expr (ECast x (Just y))= do { tell "cast("; tell_expr x; tell ", "; tell_type y; tell ")" }
-tell_expr (EFunction f) = do { tell "(function "; tell_fexpr f; tell ")" }
-tell_expr (ENew t xs) = do
-    tell "(new "; tell_type t; tell "("
-    sequence_ $ intersperse (tell ", ") $ map tell_expr xs
+    where f (n,e) = tell (n ++ ":") >> tellExpr e
+tellExpr (ECast x Nothing) = do { tell "(cast "; tellExpr x; tell ")" }
+tellExpr (ECast x (Just y))= do { tell "cast("; tellExpr x; tell ", "; tellType y; tell ")" }
+tellExpr (EFunction f) = do { tell "(function "; tellFExpr f; tell ")" }
+tellExpr (ENew t xs) = do
+    tell "(new "; tellType t; tell "("
+    sequence_ $ intersperse (tell ", ") $ map tellExpr xs
     tell "))"
-tell_expr (ECall x xs) = do
-    tell "("; tell_expr x; tell "("
-    sequence_ $ intersperse (tell ", ") $ map tell_expr xs
+tellExpr (ECall x xs) = do
+    tell "("; tellExpr x; tell "("
+    sequence_ $ intersperse (tell ", ") $ map tellExpr xs
     tell "))"
-tell_expr (EField x i) = (tell_expr x) >> (tell $ "." ++ i)
-tell_expr (EWhile True x y) = do { tell "while("; tell_expr x; tell ")"; tell_expr y }
-tell_expr (EWhile False x y) = do { tell "do "; tell_expr y; tell " while("; tell_expr x; tell ")" }
-tell_expr (EFor x y) = do { tell "for("; tell_expr x; tell ")"; tell_expr y }
-tell_expr (ETry x cs) = do
-    tell "try"; tell_expr x; nl;
+tellExpr (EField x i) = tellExpr x >> tell ('.' : i)
+tellExpr (EWhile True x y) = do { tell "while("; tellExpr x; tell ")"; tellExpr y }
+tellExpr (EWhile False x y) = do { tell "do "; tellExpr y; tell " while("; tellExpr x; tell ")" }
+tellExpr (EFor x y) = do { tell "for("; tellExpr x; tell ")"; tellExpr y }
+tellExpr (ETry x cs) = do
+    tell "try"; tellExpr x; nl;
     mapM_ f cs
     where f (n,t,e) = do { tell $ "catch("++n++":"
-                         ; tell_type t
+                         ; tellType t
                          ; tell ")"
-                         ; tell_expr e
+                         ; tellExpr e
                          ; nl }
-tell_expr (ESwitch e cs y) = do
-    tell "switch("; tell_expr e; tell ")"; openScope;
+tellExpr (ESwitch e cs y) = do
+    tell "switch("; tellExpr e; tell ")"; openScope;
     mapM_ f cs
     maybeTell g y
     closeScope;
-    where f (e,es) = do { tell $ "case "; tell_expr e; tell ":"
-                        ; mapM_ ((>> tell ";") . tell_expr) es }
-          g es = do { tell $ "default:"
-                    ; mapM_ ((>> tell ";") . tell_expr) es }
+    where f (e,es) = do { tell "case "; tellExpr e; tell ":"
+                        ; mapM_ ((>> tell ";") . tellExpr) es }
+          g es = do { tell "default:"
+                    ; mapM_ ((>> tell ";") . tellExpr) es }
 
-tell_expr e = tell "<expr>"
+tellExpr e = tell "<expr>"
 
-show_unop op = case op of
+showUnop op = case op of
     OpInc -> "++"
     OpDec -> "--"
     OpNot -> "!"
     OpNeg -> "-"
     OpNegBits -> "~"
 
-show_op op = case op of
+showOp op = case op of
     OpAdd -> "+"
     OpMul -> "*"
     OpDiv -> "/"
@@ -163,20 +164,20 @@ show_op op = case op of
     OpShr -> ">>"
     OpUShr -> ">>>"
     OpInterval -> "..."
-    OpAssignOp op -> (show_op op) ++ "="
+    OpAssignOp op -> showOp op ++ "="
 
 -----------------------------------------------
 
-tell_type (BasicType x) = tell x
-tell_type (ParamType x xs)
-    = do { tell_type x; tell "<"; mapM_ tell_type xs; tell ">" }
-tell_type (PreType pre) = tell_pre tell_type pre
-tell_type (FuncType x y)
-    = do { tell_type x; tell "->"; tell_type y }
+tellType (BasicType x) = tell x
+tellType (ParamType x xs)
+    = do { tellType x; tell "<"; mapM_ tellType xs; tell ">" }
+tellType (PreType pre) = tellPre tellType pre
+tellType (FuncType x y)
+    = do { tellType x; tell "->"; tellType y }
 
 -----------------------------------------------
 
-tell_pre teller (cond, ife, elses, elsee) = do
+tellPre teller (cond, ife, elses, elsee) = do
     tell "#if "; tell_cond cond; tell " "; teller ife;
     mapM_ tell_else elses
     maybeTell ((tell "#else " >>) . teller) elsee
@@ -188,12 +189,12 @@ tell_pre teller (cond, ife, elses, elsee) = do
 
 -----------------------------------------------
 
-maybeTell f = maybe (return ()) f
+maybeTell = maybe (return ())
 	
 tellLn x = tell x >> nl
 
-openScope  = (tellLn "{") >> (modify (\(f,n) -> (f,n+1)))
-closeScope = maybe_nl >> (modify (\(f,n) -> (f,n-1))) >> (tellLn "}")
+openScope = tellLn "{" >> modify (second (+1))
+closeScope = maybeNl >> modify (second (subtract 1))
 
 tell x = do
     (f,n) <- get
@@ -201,10 +202,7 @@ tell x = do
     W.tell x
     put (False,n)
 
-maybe_nl = do
-    (f,_) <- get
-    unless f $ nl
+maybeNl = liftM fst get >>= flip unless nl
+nl = W.tell "\n" >> modify (first (const True))
 
-nl = do
-    W.tell "\n"
-    modify (\(_,n) -> (True,n))
+
