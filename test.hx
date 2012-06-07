@@ -6,9 +6,12 @@ class Main {
 		var a = { var b = { var c = 10; c; }; b; };
     }*/
 	static function main1() {
-        var x = switch(x = {10;}) {
-            case 20: var a = {30+x;}; a;
-            default: var a = {30+x;}; a;
+        var x = switch(x = 10) {
+            case 20: var a = 30+x; a;
+            default: var a = 30+x; a;
         }
 	}
+    static function main() {
+        var x = switch(y) { case 1: 2; default: 3; };
+    }
 }

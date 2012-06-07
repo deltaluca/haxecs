@@ -37,7 +37,7 @@ tellCTrait (CTrait as tinfo) = do
             AStatic   -> tell "static"
             AOverride -> tell "override"
             AInline   -> tell "inline"
-            APre pre  -> (tellPre (mapM_ tellMember) pre)
+            APre pre  -> tellPre (mapM_ tellMember) pre
 
 tellTInfo (Member var) = do { tell "var "; tellVar var; tellLn ";" }
 tellTInfo (Method n f) = do
