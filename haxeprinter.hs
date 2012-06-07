@@ -75,7 +75,7 @@ tellExpr (EArray xs) = do
 tellExpr (EBlock xs) = do
     openScope
     mapM_ ((>> tell ";") . tellExpr) xs
-    closeScope;
+    closeScope
 tellExpr (EVars vs) = do
     tell "var "
     sequence_ $ intersperse (tell ", ") $ map tellVar vs
@@ -129,11 +129,16 @@ tellExpr (ESwitch e cs y) = do
     maybeTell g y
     closeScope;
     where f (e,es) = do { tell "case "; tellExpr e; tell ":"
-                        ; mapM_ ((>> tell ";") . tellExpr) es }
+                        ; modify (second (+1))
+                        ; mapM_ ((>> tell ";") . tellExpr) es; nl
+                        ; modify (second (subtract 1)) }
           g es = do { tell "default:"
-                    ; mapM_ ((>> tell ";") . tellExpr) es }
-
-tellExpr e = tell "<expr>"
+                    ; modify (second (+1))
+                    ; mapM_ ((>> tell ";") . tellExpr) es; nl
+                    ; modify (second (subtract 1)) }
+tellExpr (EIf x y z) = do
+    tell "if("; tellExpr x; tell ") "; tellExpr y; tell " "
+    maybeTell ((tell "else " >>) . tellExpr) z
 
 showUnop op = case op of
     OpInc -> "++"
@@ -178,14 +183,17 @@ tellType (FuncType x y)
 -----------------------------------------------
 
 tellPre teller (cond, ife, elses, elsee) = do
-    tell "#if "; tell_cond cond; tell " "; teller ife;
+    tell "#if "; tellCond cond; tell " "; teller ife;
     mapM_ tell_else elses
     maybeTell ((tell "#else " >>) . teller) elsee
     tell "#end "
     where
         tell_else (cond, ife)
-            = do { tell "#elseif "; tell_cond cond; teller ife }
-        tell_cond (PreIdent x) = tell x
+            = do { tell "#elseif "; tellCond cond; teller ife }
+        tellCond (PreIdent x) = tell x
+        tellCond (PreAnd a b) = do { tell "("; tellCond a; tell "&&"; tellCond b; tell ")" }
+        tellCond (PreOr a b) = do { tell "("; tellCond a; tell "||"; tellCond b; tell ")" }
+        tellCond (PreNot a) = do { tell "(!"; tellCond a; tell ")" }
 
 -----------------------------------------------
 
@@ -194,7 +202,7 @@ maybeTell = maybe (return ())
 tellLn x = tell x >> nl
 
 openScope = tellLn "{" >> modify (second (+1))
-closeScope = maybeNl >> modify (second (subtract 1))
+closeScope = maybeNl >> modify (second (subtract 1)) >> tellLn "}"
 
 tell x = do
     (f,n) <- get
