@@ -7,7 +7,6 @@ import Control.Monad.State
 import Control.Arrow (first,second)
 import Data.Traversable (traverse)
 
-transform :: File -> File
 transform (pckg,traits) = (pckg,traits')
     where
         traits' = map transf traits
@@ -19,17 +18,18 @@ transform (pckg,traits) = (pckg,traits')
         tinfof (Method name (ps,t,expr)) = Method name (ps,t,funcTrans expr)
         tinfof x = x
 
-funcTrans :: Expr -> Expr
 funcTrans expr = let xs = unliftB expr in EBlock $ ftransform xs
     where
-        ftransform exprs = let (xs,(lifts,_)) = runState (transx exprs) ([],0) in lifts ++ xs
+        ftransform exprs = let (xs,(lifts,_)) = runState (transx exprs) ([],0) in lmap lifts : xs
+        lmap xs = EVars [(x,Nothing,Nothing) | x <- xs]
         transx = liftM concat . mapM transf
 
 -- get a new variable name from state
+newvar :: State ([String],Int) Expr
 newvar = do
     (lifts,id) <- get
-    let vname = "__newvar__" ++ show id
-    put (EVars [(vname, Nothing, Nothing)] : lifts, id+1)
+    let vname = "__t" ++ show id
+    put (vname:lifts, id+1)
     return $ EConst (CIdent vname)
 
 varname (EConst (CIdent vname)) = vname
@@ -49,83 +49,85 @@ transb = liftM liftB . transf
 -- apply transformations to remove complex expressions from a statement
 --   not allowed in c#
 -- return list of statements
-transf  :: Expr -> State ([Expr],Int) [Expr]
-
 transf (EReturn (Just x)) = do
-	(xs,x') <- uncomplicate x
-	return $ xs ++ [EReturn (Just x')]
+	x' <- uncomplicate x
+	return $ [EReturn (Just x')]
 transf (EVars vs) = do
     ys' <- mapM (traverse uncomplicate . (\(_,_,z) -> z)) vs
-    let ls = concatMap (maybe [] fst) ys'
-    let vs' = zipWith (\(n,t,_) v -> (n,t,v)) vs (map (fmap snd) ys')
-    return $ ls ++ [EVars vs']
+    let vs' = zipWith (\(n,t,_) v -> (n,t,v)) vs ys'
+    return $ [EVars vs']
 transf (EBlock xs) = do
     xs' <- mapM transf xs
     return [EBlock (concat xs')]
 
 -- seperate transf rule for if to keep structure where possible.
 transf (EIf x y z) = do
-    (xs,x') <- uncomplicate x
+    x' <- uncomplicate x
     ys' <- transb y
     zs' <- maybe (return Nothing) (liftM (Just . EBlock) . transf) z
-    return $ xs ++ [EIf x' ys' zs']
-
+    return $ [EIf x' ys' zs']
 transf (EFor x y) = do
-    (xs,x') <- uncomplicate x
+    x' <- uncomplicate x
     y' <- transb y
-    return $ xs ++ [EFor x' y']
+    return $ [EFor x' y']
 transf (EWhile f x y) = do
-    (xs,x') <- uncomplicate x
+    x' <- uncomplicate x
     y' <- transb y
-    return $ xs ++ [EWhile f x' y']
+    return $ [EWhile f x' y']
 
 -- seperate transf rule for switch to keep structure where possible.
 transf (ESwitch x cs def) = do
-    (xs,x') <- uncomplicate x
+    x' <- uncomplicate x
     let ms = map fst cs
     let es' = map (unliftB . funcTrans . liftB . snd) cs
     let def' = liftM (unliftB . funcTrans . liftB) def
-    return $ xs ++ [ESwitch x' (zip ms es') def']
+    return $ [ESwitch x' (zip ms es') def']
 
 -- default
 transf x = do
-    (xs,x') <- uncomplicate x
-    return $ xs ++ [x']
+    x' <- uncomplicate x
+    return $ [x']
 
 -- uncomplicate an expression list
-uncomplicateN :: [Expr] -> State ([Expr],Int) ([Expr],[Expr])
-uncomplicateN xs = do
-    xs' <- mapM uncomplicate xs
-    return (concatMap fst xs', map snd xs')
+uncomplicateN xs = mapM uncomplicate xs
 
 -- uncomplicate single expression
 -- return list of statements that need to be executed before expression is evaluated
---   and the new expression.
-uncomplicate :: Expr -> State ([Expr],Int) ([Expr],Expr)
-
+uncomplicate :: Expr -> State ([String],Int) Expr
 uncomplicate (ECall x y) = do
-    (xs,x') <- uncomplicate x
-    (ys,y') <- uncomplicateN y  
-    return (xs ++ ys, ECall x' y')
+    x' <- uncomplicate x
+    y' <- uncomplicateN y
+    return $ ECall x' y'
 uncomplicate (EArrayAccess x y) = do
-    (xs,x') <- uncomplicate x
-    (ys,y') <- uncomplicate y
-    return (xs ++ ys, EArrayAccess x' y')
+    x' <- uncomplicate x
+    y' <- uncomplicate y
+    return $ EArrayAccess x' y'
 uncomplicate (EArray x) = do
-    (xs,x') <- uncomplicateN x
-    return (xs, EArray x')
+    x' <- uncomplicateN x
+    return $ EArray x'
 uncomplicate (EThrow x) = do
-    (xs,x') <- uncomplicate x
-    return (xs, EThrow x')
+    x' <- uncomplicate x
+    return $ EThrow x'
 uncomplicate (ENew t x) = do
-    (xs,x') <- uncomplicateN x
-    return (xs, ENew t x')
+    x' <- uncomplicateN x
+    return $ ENew t x'
 uncomplicate (EIf cond x (Just y)) = do
-    (cs,c') <- uncomplicate cond
-    (xs,x') <- uncomplicate x
-    (ys,y') <- uncomplicate y
-    return (cs++xs++ys, ETernary c' x' y')
+    c' <- uncomplicate cond
+    x' <- uncomplicate x
+    y' <- uncomplicate y
+    return $ ETernary c' x' y'
 
+uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
+    where
+        exprBlock = (transf (head xs)) >>= uncomplicate . head
+        stdBlock = do
+            fs <- liftM concat $ mapM transf xs
+            let xs' = init fs
+            y <- uncomplicate (last fs) -- need to ensure this last statement is expression.
+            return $ ECall (EFunction ([],Nothing,EBlock $ xs' ++ [EReturn $ Just y])) []
+
+{- fails because we lose potential laziness in combination with other expressions
+   and may incur extra side effects.
 uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
     where
         exprBlock = do
@@ -137,32 +139,34 @@ uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
             let xs' = init fs
             (ys',y) <- uncomplicate (last fs) -- need to ensure this last statement is expression.
             return ([ EBlock $ xs' ++ ys' ++ [EBinop OpAssign retvar y] ], retvar)
+-}
 
 uncomplicate (EBinop op x y) = do
-    (xs,x') <- uncomplicate x
-    (ys,y') <- uncomplicate y
-    return (xs++ys, EBinop op x' y')
+    x' <- uncomplicate x
+    y' <- uncomplicate y
+    return $ EBinop op x' y'
 uncomplicate (ETernary x y z) = do
-    (xs,x') <- uncomplicate x
-    (ys,y') <- uncomplicate y
-    (zs,z') <- uncomplicate z
-    return (xs ++ ys ++ zs, ETernary x' y' z')
+    x' <- uncomplicate x
+    y' <- uncomplicate y
+    z' <- uncomplicate z
+    return $ ETernary x' y' z'
 uncomplicate (EUnop op f x) = do
-    (xs,x') <- uncomplicate x
-    return (xs, EUnop op f x')
+    x' <- uncomplicate x
+    return $ EUnop op f x'
 uncomplicate (EUntyped x) = do
-    (xs,x') <- uncomplicate x
-    return (xs, EUntyped x')
+    x' <- uncomplicate x
+    return $ EUntyped x'
 uncomplicate (ECast x t) = do
-    (xs,x') <- uncomplicate x
-    return (xs, ECast x' t)
+    x' <- uncomplicate x
+    return $ ECast x' t
 uncomplicate (EAnon ns) = do
-    (xs,x') <- (uncomplicateN . map snd) ns
+    x' <- (uncomplicateN . map snd) ns
     let ns' = zipWith (\(n,_) x -> (n,x)) ns x'
-    return (xs, EAnon ns')
+    return $ EAnon ns'
 uncomplicate (EField x i) = do
-    (xs,x') <- uncomplicate x
-    return (xs, EField x' i)
+    x' <- uncomplicate x
+    return $ EField x' i
+{-
 uncomplicate (ESwitch x cs def) = do
     --transform into trivial switch
     (xs,x') <- uncomplicate x
@@ -171,7 +175,7 @@ uncomplicate (ESwitch x cs def) = do
     (ds,d') <- maybe (return ([],Nothing)) (liftM (second (Just . unliftB)) . uncomplicate . liftB) def
 
     --transform into block expression with if cascade
-    let exprx = isPure x'
+    let exprx = isPureExpr x'
     tmpvar <- if exprx then return x' else newvar
     let vare = if exprx then [] else [EVars [(varname tmpvar,Nothing,Just x')]]
 
@@ -182,14 +186,13 @@ uncomplicate (ESwitch x cs def) = do
         cascade v []   Nothing = Nothing
         cascade v [] (Just xs) = Just (head xs)
         cascade v (i:is) elsee = Just (EIf (EBinop OpEq v (fst i)) (snd i) $ cascade v is elsee)
-
+-}
 -- default
-uncomplicate x = return ([],x)
+uncomplicate x = return x
 
 -------------------------------------------
 
 -- test if expression requires uncomplicating!
-isExpr :: Expr -> Bool
 isExpr (EConst c) = True
 isExpr (EArray xs) = all isExpr xs
 isExpr (EArrayAccess x y) = isExpr x && isExpr y
@@ -210,27 +213,3 @@ isExpr (EUntyped x) = isExpr x
 
 -- default
 isExpr _ = False
-
--- test if true expression is also immutable and side-effect free
-isPure :: Expr -> Bool
-isPure x = isExpr x && pure x
-    where 
-        pure (EConst (CIdent _)) = False -- var may change
-        pure (EConst _) = True
-        pure (EArray xs) = all isPure xs
-        pure (EArrayAccess x y) = isPure x && isPure y
-        pure (EBlock xs) = length xs == 1 && isPure (head xs)
-        pure (EUnop OpInc _ _) = False
-        pure (EUnop OpDec _ _) = False
-        pure (EUnop _ _ x) = isPure x
-        pure (EBinop OpAssign _ _) = False
-        pure (EBinop (OpAssignOp _) _ _) = False
-        pure (EBinop _ x y) = isPure x && isPure y
-        pure (ETernary x y z) = all isPure [x,y,z]
-        pure (EField x _) = isPure x
-        pure (ECast x _) = isPure x
-        -- don't allow pure EAnon to avoid duplication
-        -- similarly for untyped/
-        
-        --default
-        pure _ = False

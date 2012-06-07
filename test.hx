@@ -5,7 +5,7 @@ class Main {
 	static function main2() {
 		var a = { var b = { var c = 10; c; }; b; };
     }*/
-	static function main1() {
+	static function main() {
         var x = switch(x = 10) {
             case 20: var a = 30+x; a;
             default: var a = 30+x; a;
@@ -13,5 +13,8 @@ class Main {
 	}
     static function main() {
         var x = switch(y) { case 1: 2; default: 3; };
+    }
+    static function main() {
+        var x = { var y = 10; y; };
     }
 }
