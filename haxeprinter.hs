@@ -128,14 +128,12 @@ tellExpr (ESwitch e cs y) = do
     mapM_ f cs
     maybeTell g y
     closeScope;
-    where f (e,es) = do { tell "case "; tellExpr e; tell ":"
-                        ; modify (second (+1))
-                        ; mapM_ ((>> tell ";") . tellExpr) es; nl
-                        ; modify (second (subtract 1)) }
-          g es = do { tell "default:"
-                    ; modify (second (+1))
-                    ; mapM_ ((>> tell ";") . tellExpr) es; nl
-                    ; modify (second (subtract 1)) }
+    where f (e,es) = tell "case " >> tellExpr e >> tell ":" >> rest es
+          g es = tell "default:" >> rest es
+          rest es = do { modify (second (+1))
+                       ; mapM_ ((>> tell ";") . tellExpr) es; nl
+                       ; modify (second (subtract 1)) }
+
 tellExpr (EIf x y z) = do
     tell "if("; tellExpr x; tell ") "; tellExpr y; tell " "
     maybeTell ((tell "else " >>) . tellExpr) z

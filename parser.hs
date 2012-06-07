@@ -104,7 +104,7 @@ operator s
                   ; notFollowedBy prefixer }
     where prefixer
             = do { rest <- many1 $ oneOf opletter
-                 ; unless (any (flip elem operators) $ fixes s rest) parserZero
+                 ; unless (any (`elem` operators) $ fixes s rest) parserZero
 --                 ; if any (flip elem operators) $ fixes s rest then return () else parserZero
                  }
           fixes xs [] = [xs]
@@ -260,7 +260,7 @@ typep = chainr1 baseType (do { operator "->"; return FuncType })
                    <|> liftM PreType (pre typep)
                    <?> "factor type"
         baseType = factorType >>= rest <?> "factored type"
-            where rest x = (do { y <- (liftM (ParamType x) $ angles (sepBy1 typep comma))
+            where rest x = (do { y <- liftM (ParamType x) $ angles (sepBy1 typep comma)
                                ; rest y })
                         <|>  return x
 
@@ -268,7 +268,7 @@ typep = chainr1 baseType (do { operator "->"; return FuncType })
 
 -- all expressions
 expr = chainr1 turExpr (choice [
-         (do { operator "="; return $ EBinop OpAssign }),
+         do { operator "="; return $ EBinop OpAssign },
          op "+="  OpAdd, op "-="  OpSub, op "/="   OpDiv, op "*=" OpMul, op "%=" OpMod,
          op "<<=" OpShl, op ">>=" OpShr, op ">>>=" OpUShr,
          op "&="  OpAnd, op "|="  OpOr,  op "^="   OpXor

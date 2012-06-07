@@ -84,7 +84,7 @@ transf (ESwitch x cs def) = do
     (xs,x') <- uncomplicate x
     let ms = map fst cs
     let es' = map (unliftB . funcTrans . liftB . snd) cs
-    let def' = maybe Nothing (Just . unliftB . funcTrans . liftB) def
+    let def' = liftM (unliftB . funcTrans . liftB) def
     return $ xs ++ [ESwitch x' (zip ms es') def']
 
 -- default
@@ -126,11 +126,11 @@ uncomplicate (EIf cond x (Just y)) = do
     (ys,y') <- uncomplicate y
     return (cs++xs++ys, ETernary c' x' y')
 
-uncomplicate (EBlock xs) = if (isExpr (EBlock xs)) then exprBlock else stdBlock
+uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
     where
         exprBlock = do
-            f <- transf (xs!!0)
-            uncomplicate (f!!0)
+            f <- transf (head xs)
+            uncomplicate (head f)
         stdBlock = do 
             retvar <- newvar -- out var for block to use
             fs <- liftM concat $ mapM transf xs
@@ -172,7 +172,7 @@ uncomplicate (ESwitch x cs def) = do
 
     --transform into block expression with if cascade
     let exprx = isPure x'
-    tmpvar <- if exprx then (return x') else newvar
+    tmpvar <- if exprx then return x' else newvar
     let vare = if exprx then [] else [EVars [(varname tmpvar,Nothing,Just x')]]
 
     (fs,f') <- uncomplicate $ EBlock (vare ++ maybe [] return (cascade tmpvar (zip ms e') d'))
@@ -180,7 +180,7 @@ uncomplicate (ESwitch x cs def) = do
     return (xs ++ es ++ ds ++ fs, f')
     where
         cascade v []   Nothing = Nothing
-        cascade v [] (Just xs) = Just (xs!!0)
+        cascade v [] (Just xs) = Just (head xs)
         cascade v (i:is) elsee = Just (EIf (EBinop OpEq v (fst i)) (snd i) $ cascade v is elsee)
 
 -- default
@@ -193,7 +193,7 @@ isExpr :: Expr -> Bool
 isExpr (EConst c) = True
 isExpr (EArray xs) = all isExpr xs
 isExpr (EArrayAccess x y) = isExpr x && isExpr y
-isExpr (EBlock xs) = length xs == 1 && isExpr (xs !! 0)
+isExpr (EBlock xs) = length xs == 1 && isExpr (head xs)
 isExpr (EUnop _ _ x) = isExpr x
 isExpr (EBinop _ x y) = isExpr x && isExpr y
 isExpr (ETernary x y z) = all isExpr [x,y,z]
@@ -219,7 +219,7 @@ isPure x = isExpr x && pure x
         pure (EConst _) = True
         pure (EArray xs) = all isPure xs
         pure (EArrayAccess x y) = isPure x && isPure y
-        pure (EBlock xs) = length xs == 1 && isPure (xs !! 0)
+        pure (EBlock xs) = length xs == 1 && isPure (head xs)
         pure (EUnop OpInc _ _) = False
         pure (EUnop OpDec _ _) = False
         pure (EUnop _ _ x) = isPure x
