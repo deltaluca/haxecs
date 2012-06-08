@@ -14,6 +14,8 @@ main = do
     case file of
         Left err -> putStrLn $ "...................fail " ++ show err
         Right val -> do
+            putStrLn $ show val
+            putStrLn "-----"
             putStrLn $ printAST val
             putStrLn "-----"
             putStrLn $ printAST (transform val)

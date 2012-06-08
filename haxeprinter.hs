@@ -74,7 +74,7 @@ tellExpr (EArray xs) = do
     tell "]"
 tellExpr (EBlock xs) = do
     openScope
-    mapM_ ((>> tell ";") . tellExpr) xs
+    mapM_ ((>> tellLn ";") . tellExpr) xs
     closeScope
 tellExpr (EVars vs) = do
     tell "var "
@@ -182,11 +182,11 @@ tellType (FuncType x y)
 
 tellPre teller (cond, ife, elses, elsee) = do
     tell "#if "; tellCond cond; tell " "; teller ife;
-    mapM_ tell_else elses
+    mapM_ tellElse elses
     maybeTell ((tell "#else " >>) . teller) elsee
     tell "#end "
     where
-        tell_else (cond, ife)
+        tellElse (cond, ife)
             = do { tell "#elseif "; tellCond cond; teller ife }
         tellCond (PreIdent x) = tell x
         tellCond (PreAnd a b) = do { tell "("; tellCond a; tell "&&"; tellCond b; tell ")" }

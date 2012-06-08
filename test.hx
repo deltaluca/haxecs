@@ -5,16 +5,14 @@ class Main {
 	static function main2() {
 		var a = { var b = { var c = 10; c; }; b; };
     }*/
+/*	#if true
+    static function main() {
+        var x = { { { { { var a = 10; } } } } };
+    }
+	#end
+*/
 	static function main() {
-        var x = switch(x = 10) {
-            case 20: var a = 30+x; a;
-            default: var a = 30+x; a;
-        }
+		#if true var x = { { var a = 10; a; } }; #end
+		var x = #if true { { var a = 10; a; } } #end;
 	}
-    static function main() {
-        var x = switch(y) { case 1: 2; default: 3; };
-    }
-    static function main() {
-        var x = { var y = 10; y; };
-    }
 }

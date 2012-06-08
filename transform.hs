@@ -1,35 +1,37 @@
 module Transform (
         transform -- :: File -> File
+    ,transpre,transpreM,uncomplicate
     ) where
 
 import Parser
 import Control.Monad.State
 import Control.Arrow (first,second)
+import Control.Applicative
 import Data.Traversable (traverse)
 
 transform (pckg,traits) = (pckg,traits')
     where
         traits' = map transf traits
         transf (FClass t s ctraits) = FClass t s (map ctransf ctraits)
+        transf (FPre pre) = FPre $ transpre (liftM transf) pre
         transf x = x
 
         ctransf (CTrait as tinfo) = CTrait as $ tinfof tinfo
+        ctransf (CPre pre) = CPre $ transpre (liftM ctransf) pre
 
         tinfof (Method name (ps,t,expr)) = Method name (ps,t,funcTrans expr)
         tinfof x = x
 
 funcTrans expr = let xs = unliftB expr in EBlock $ ftransform xs
     where
-        ftransform exprs = let (xs,(lifts,_)) = runState (transx exprs) ([],0) in lmap lifts : xs
-        lmap xs = EVars [(x,Nothing,Nothing) | x <- xs]
+        ftransform exprs = fst $ runState (transx exprs) 0
         transx = liftM concat . mapM transf
 
 -- get a new variable name from state
-newvar :: State ([String],Int) Expr
 newvar = do
-    (lifts,id) <- get
+    id <- get
     let vname = "__t" ++ show id
-    put (vname:lifts, id+1)
+    modify (+1)
     return $ EConst (CIdent vname)
 
 varname (EConst (CIdent vname)) = vname
@@ -46,16 +48,36 @@ liftB xs = EBlock xs
 -- apply transformation, possibly lifting to a block
 transb = liftM liftB . transf
 
+-- transform Pre a
+transpre :: (a -> b) -> Pre a -> Pre b
+transpre xf (cond, ife, elses, elsee)
+    = (cond, ife', elses', elsee')
+    where
+        ife' = xf ife
+        elses' = map (second xf) elses
+        elsee' = liftM xf elsee
+
+transpreM :: (Applicative m, Monad m) => (a -> m b) -> Pre a -> m (Pre b)
+transpreM xf (cond, ife, elses, elsee) = do
+    ife' <- xf ife
+    es' <- mapM (xf . snd) elses
+    let elses' = zip (map fst elses) es'
+    elsee' <- traverse xf elsee
+    return (cond,ife',elses',elsee')
+
 -- apply transformations to remove complex expressions from a statement
 --   not allowed in c#
 -- return list of statements
 transf (EReturn (Just x)) = do
 	x' <- uncomplicate x
-	return $ [EReturn (Just x')]
+	return [EReturn (Just x')]
 transf (EVars vs) = do
     ys' <- mapM (traverse uncomplicate . (\(_,_,z) -> z)) vs
     let vs' = zipWith (\(n,t,_) v -> (n,t,v)) vs ys'
-    return $ [EVars vs']
+    return [EVars vs']
+
+
+transf (EBlock [EBlock xs]) = transf (EBlock xs)
 transf (EBlock xs) = do
     xs' <- mapM transf xs
     return [EBlock (concat xs')]
@@ -65,15 +87,15 @@ transf (EIf x y z) = do
     x' <- uncomplicate x
     ys' <- transb y
     zs' <- maybe (return Nothing) (liftM (Just . EBlock) . transf) z
-    return $ [EIf x' ys' zs']
+    return [EIf x' ys' zs']
 transf (EFor x y) = do
     x' <- uncomplicate x
     y' <- transb y
-    return $ [EFor x' y']
+    return [EFor x' y']
 transf (EWhile f x y) = do
     x' <- uncomplicate x
     y' <- transb y
-    return $ [EWhile f x' y']
+    return [EWhile f x' y']
 
 -- seperate transf rule for switch to keep structure where possible.
 transf (ESwitch x cs def) = do
@@ -81,19 +103,22 @@ transf (ESwitch x cs def) = do
     let ms = map fst cs
     let es' = map (unliftB . funcTrans . liftB . snd) cs
     let def' = liftM (unliftB . funcTrans . liftB) def
-    return $ [ESwitch x' (zip ms es') def']
+    return [ESwitch x' (zip ms es') def']
+
+transf (EPreN pre) = do
+    pre' <- liftM EPreN (transpreM (liftM concat . mapM transf) pre)
+    return [pre']
 
 -- default
 transf x = do
     x' <- uncomplicate x
-    return $ [x']
+    return [x']
 
 -- uncomplicate an expression list
-uncomplicateN xs = mapM uncomplicate xs
+uncomplicateN = mapM uncomplicate
 
 -- uncomplicate single expression
 -- return list of statements that need to be executed before expression is evaluated
-uncomplicate :: Expr -> State ([String],Int) Expr
 uncomplicate (ECall x y) = do
     x' <- uncomplicate x
     y' <- uncomplicateN y
@@ -117,29 +142,15 @@ uncomplicate (EIf cond x (Just y)) = do
     y' <- uncomplicate y
     return $ ETernary c' x' y'
 
+uncomplicate (EBlock [EBlock xs]) = uncomplicate (EBlock xs)
 uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
     where
-        exprBlock = (transf (head xs)) >>= uncomplicate . head
+        exprBlock = transf (head xs) >>= uncomplicate . head
         stdBlock = do
             fs <- liftM concat $ mapM transf xs
             let xs' = init fs
             y <- uncomplicate (last fs) -- need to ensure this last statement is expression.
             return $ ECall (EFunction ([],Nothing,EBlock $ xs' ++ [EReturn $ Just y])) []
-
-{- fails because we lose potential laziness in combination with other expressions
-   and may incur extra side effects.
-uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
-    where
-        exprBlock = do
-            f <- transf (head xs)
-            uncomplicate (head f)
-        stdBlock = do 
-            retvar <- newvar -- out var for block to use
-            fs <- liftM concat $ mapM transf xs
-            let xs' = init fs
-            (ys',y) <- uncomplicate (last fs) -- need to ensure this last statement is expression.
-            return ([ EBlock $ xs' ++ ys' ++ [EBinop OpAssign retvar y] ], retvar)
--}
 
 uncomplicate (EBinop op x y) = do
     x' <- uncomplicate x
@@ -166,27 +177,24 @@ uncomplicate (EAnon ns) = do
 uncomplicate (EField x i) = do
     x' <- uncomplicate x
     return $ EField x' i
-{-
+
 uncomplicate (ESwitch x cs def) = do
-    --transform into trivial switch
-    (xs,x') <- uncomplicate x
+    x' <- uncomplicate x
     let ms = map fst cs
-    (es,e') <- uncomplicateN (map (liftB . snd) cs)
-    (ds,d') <- maybe (return ([],Nothing)) (liftM (second (Just . unliftB)) . uncomplicate . liftB) def
+    es' <- uncomplicateN (map (liftB . snd) cs)
+    def' <- maybe (return Nothing) (liftM (Just . unliftB) . uncomplicate . liftB) def
 
-    --transform into block expression with if cascade
-    let exprx = isPureExpr x'
-    tmpvar <- if exprx then return x' else newvar
-    let vare = if exprx then [] else [EVars [(varname tmpvar,Nothing,Just x')]]
+    tmpvar <- newvar
+    ife <- traverse uncomplicate (cascade tmpvar (zip ms es') def')
 
-    (fs,f') <- uncomplicate $ EBlock (vare ++ maybe [] return (cascade tmpvar (zip ms e') d'))
-
-    return (xs ++ es ++ ds ++ fs, f')
+    return $ ECall (EFunction ([(False, (varname tmpvar, Nothing, Nothing))], Nothing, EReturn ife)) [x']
     where
-        cascade v []   Nothing = Nothing
+        cascade v [] Nothing   = Nothing
         cascade v [] (Just xs) = Just (head xs)
         cascade v (i:is) elsee = Just (EIf (EBinop OpEq v (fst i)) (snd i) $ cascade v is elsee)
--}
+
+uncomplicate (EPre1 pre) = liftM EPre1 (transpreM uncomplicate pre)
+
 -- default
 uncomplicate x = return x
 
