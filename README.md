@@ -5,3 +5,5 @@ Purpose being to provide a native C# port of Nape akin to the native .swc's avai
 Whilst Haxe now targets C# (in nightlies at time of writing). The output is not suitable for use in a native C# project where the need to support the entirety of the Haxe language bastardises the output to a significant degree.
 
 Another key note is to restrict the subset of Haxe supported so that preprocessor information can be retained in the translation (So that w.r.t to Nape a single C# version can be produced instead of 3 seperate versions (for build modes) as is required for .swc targets in AS3)
+
+Present status: abandoned due to (unreasonable to surmount) issues regarding c#'s rather... lacking type inference which would necessitate emulating haxe's type inference AS WELL! 
