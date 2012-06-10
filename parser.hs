@@ -10,7 +10,7 @@ module Parser
 		Binop(OpAdd,OpMul,OpDiv,OpSub,OpMod,OpAssign,OpEq,OpNeq,OpGt,OpLt,OpGeq,OpLeq,OpOr,OpAnd,OpXor,OpBoolAnd,OpBoolOr,OpShl,OpShr,OpUShr,OpAssignOp,OpInterval),
 		Unop(OpInc,OpDec,OpNot,OpNeg,OpNegBits),
 		UnopFlag(FlagPre,FlagPost),
-		Expr(EConst,EArray,EArrayAccess,EBlock,EUnop,EBinop,ETernary,EWhile,EFor,EReturn,EIn,EIf,EField,EContinue,EBreak,ECall,EThrow,ETry,ENew,ESwitch,EVars,EFunction,ECast,EPre1,EPreN,EAnon,EUntyped),
+		Expr(EConst,EArray,EArrayAccess,EBlock,EUnop,EBinop,ETernary,EWhile,EFor,EReturn,EIn,EIf,EField,EContinue,EBreak,ECall,EThrow,ETry,ENew,ESwitch,EVars,EFunction,ECast,EPre1,EPreN,EAnon,EUntyped,EUnchecked,EStdFor),
 		Catch,
 		Case,
 		VarExpr,
@@ -139,6 +139,12 @@ data Type = BasicType String      -- [Package.]?Ident
           | FuncType Type Type    -- Type -> Type
           deriving (Show)
 
+instance Eq Type where
+    (BasicType x) == (BasicType y) = x == y
+    (ParamType t ts) == (ParamType s ss) = t == s && all (uncurry (==)) (zip ts ss) && length ts == length ss 
+    (FuncType a b) == (FuncType x y) = a == x && b == y
+    x == y = False
+
 type Ident   = String -- name of Ident
 type Package = String -- name of Package
 
@@ -186,6 +192,10 @@ data Expr = EConst Constant                     -- literal/ident
           | EPreN (Pre [Expr]) -- statement
           | EAnon [(Ident,Expr)]                -- { name : value, name : value ... }
           | EUntyped Expr                       -- untyped expr
+
+-- additional AST for c#/js
+		  | EUnchecked Expr -- c# to wrap functions and avoid overflow checks
+		  | EStdFor Expr Expr Expr Expr -- c#/js standard for loop
           deriving (Show)
 
 type Catch    = (Ident,Type,Expr)                  -- (Ident : Type) Expr
