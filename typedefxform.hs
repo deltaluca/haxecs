@@ -8,7 +8,8 @@ import Control.Monad.State
 import Control.Arrow (first,second)
 import Control.Applicative
 import Data.Traversable (traverse)
-import Data.Maybe (fromMaybe,mapMaybe)
+import Data.Maybe (fromMaybe,mapMaybe,catMaybes)
+import Debug.Trace (trace)
 
 transform (pckg,traits) = (pckg,traits')
     where
@@ -65,11 +66,38 @@ transform (pckg,traits) = (pckg,traits')
 
 gather :: FileTrait -> [(Type,Type)]
 gather (FTypeDef from to) = [(from,to)]
-gather (FPre _) = error "Typedef must not be within a #if block"
+gather (FPre _) = []
 gather x = []
 
+combine :: Maybe [a] -> Maybe [a] -> Maybe [a]
+combine (Just x) (Just y) = Just (x ++ y)
+combine _ _ = Nothing
+
+unify :: Type -> Type -> Maybe [(Type,Type)]
+unify (BasicType x) (BasicType y) = Just $ if x==y then [] else [(BasicType y,BasicType x)]
+unify (FuncType x y) (FuncType z w) = combine (unify x z) (unify z w)
+unify (ParamType x y) (ParamType z w) = combine (unify x z) (foldl combine (Just []) $ zipWith unify y w)
+unify _ _ = Nothing
+
+substitute :: [(Type,Type)] -> Type -> Type
+substitute xs (BasicType x)
+    = case lookup (BasicType x) xs of
+        Just t -> t
+        Nothing -> BasicType x
+substitute xs (FuncType x y) = FuncType (substitute xs x) (substitute xs y)
+substitute xs (ParamType x y) = ParamType (substitute xs x) (map (substitute xs) y)
+substitute xs (PreType (cond, ife, elses, elsee))
+    = PreType (cond, substitute xs ife, map (second (substitute xs)) elses, liftM (substitute xs) elsee) 
+
 resolve :: Type -> [(Type,Type)] -> Type
-resolve (BasicType x) xs
+resolve t [] = t
+resolve t ((l,r):xs) = case (let uni = unify t l in trace (show uni) uni) of
+    Nothing -> resolve t xs
+    Just s -> substitute s r
+
+{-resolve :: Type -> [(Type,Type)] -> Type
+resolve t xs = find t xs
+resolve (BasicType x) xs = fi
     = maybe (BasicType x) (flip resolve xs) (lookup (BasicType x) xs)
 resolve (FuncType x y) xs
     = maybe def (flip resolve xs) (lookup (FuncType x y) xs)
@@ -82,4 +110,4 @@ resolve (ParamType t ts) xs
                         Nothing -> ParamType t ts'
     where ts' = map (flip resolve xs) ts
 resolve (PreType pre) xs
-    = PreType $ transpre (flip resolve xs) pre
+    = PreType $ transpre (flip resolve xs) pre-}

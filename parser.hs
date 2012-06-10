@@ -47,7 +47,6 @@ operators = ["+","-","*","/","%",
 
 opletter = "!=<>?~-+*/^|&:%"
 
-langDef :: LanguageDef st
 langDef = emptyDef {
     P.commentStart = "/*",
     P.commentEnd = "*/",
@@ -84,7 +83,7 @@ colon  = lexeme $ P.colon      lexer
 reserved = lexeme . P.reserved lexer
 symbol   = lexeme . P.symbol   lexer
 
-lexeme p      = do { res <- p; whiteSpace; return res }
+lexeme p = do { res <- p; whiteSpace; return res }
 
 -- not as nice as the inbuilt one with escape chars. but need to allow newlines in strings!
 -- aswell as strings formed with '' instead of ""
@@ -105,13 +104,12 @@ operator s
     where prefixer
             = do { rest <- many1 $ oneOf opletter
                  ; unless (any (`elem` operators) $ fixes s rest) parserZero
---                 ; if any (flip elem operators) $ fixes s rest then return () else parserZero
                  }
           fixes xs [] = [xs]
           fixes xs (y:ys) = let xsy = xs++[y] in xsy : fixes xsy ys
 
 -- ignore whitespace and metadata for lexemes
-whiteSpace    = let ws = P.whiteSpace lexer in ws>>many(metadata>>ws)
+whiteSpace = let ws = P.whiteSpace lexer in ws>>many(metadata>>ws)
 metadata = (do { char '@'; optional (char ':')
                ; many1 (alphaNum <|> char '_')
                ; optional(do { char '('

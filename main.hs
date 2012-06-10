@@ -4,7 +4,7 @@ import System.Environment
 import Parser
 import qualified ExprTransform as E
 import qualified TypedefTransform as T
-import qualified ForTransform as F
+import qualified CSTransform as F
 import qualified CSPrinter as CS
 import qualified HaxePrinter as Haxe
 
@@ -18,13 +18,17 @@ main = do
     case file of
         Left err -> putStrLn $ " :: ..................fail " ++ show err
         Right val
-           -> do { let eval = E.transform val
-                 ; putStrLn $ show eval
-                 ; putStrLn $ Haxe.printAST eval
-                 ; let tval = T.transform eval
-                 ; putStrLn $ show tval
+           -> do { let tval = T.transform val
+                 ; putStrLn "After typedef transforms"
+                 ; print tval
                  ; putStrLn $ Haxe.printAST tval
-                 ; let fval = F.transform tval
-                 ; putStrLn $ show fval
+                 ; let eval = E.transform tval
+                 ; putStrLn "After expression transforms"
+                 ; print eval
+                 ; putStrLn $ CS.printAST eval
+                 ; let fval = F.transform eval
+                 ; putStrLn "After c# specific transforms"
+                 ; print fval
                  ; putStrLn $ CS.printAST fval
+                 ; writeFile outfile (CS.printAST fval)
                  }

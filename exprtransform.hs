@@ -71,6 +71,13 @@ transf (EWhile f x y) = do
     y' <- transb y
     return [EWhile f x' y']
 
+transf (EStdFor x y z w) = do
+    x' <- transf x
+    y' <- uncomplicate y
+    z' <- uncomplicate z
+    w' <- uncomplicate w
+    return [EStdFor (head x') y' z' w']
+
 -- seperate transf rule for switch to keep structure where possible.
 transf (ESwitch x cs def) = do
     x' <- uncomplicate x
@@ -122,9 +129,12 @@ uncomplicate (EBlock xs) = if isExpr (EBlock xs) then exprBlock else stdBlock
         exprBlock = transf (head xs) >>= uncomplicate . head
         stdBlock = do
             fs <- liftM concat $ mapM transf xs
-            let xs' = init fs
-            y <- uncomplicate (last fs) -- need to ensure this last statement is expression.
-            return $ ECall (EFunction ([],Nothing,EBlock $ xs' ++ [EReturn $ Just y])) []
+            case fs of
+                [] -> return $ EBlock []
+                _  -> do
+                    let xs' = init fs
+                    y <- uncomplicate (last fs) -- need to ensure this last statement is expression.
+                    return $ ECall (EFunction ([],Nothing,EBlock $ xs' ++ [EReturn $ Just y])) []
 
 uncomplicate (EBinop op x y) = do
     x' <- uncomplicate x
