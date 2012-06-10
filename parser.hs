@@ -10,7 +10,7 @@ module Parser
 		Binop(OpAdd,OpMul,OpDiv,OpSub,OpMod,OpAssign,OpEq,OpNeq,OpGt,OpLt,OpGeq,OpLeq,OpOr,OpAnd,OpXor,OpBoolAnd,OpBoolOr,OpShl,OpShr,OpUShr,OpAssignOp,OpInterval),
 		Unop(OpInc,OpDec,OpNot,OpNeg,OpNegBits),
 		UnopFlag(FlagPre,FlagPost),
-		Expr(EConst,EArray,EArrayAccess,EBlock,EUnop,EBinop,ETernary,EWhile,EFor,EReturn,EIn,EIf,EField,EContinue,EBreak,ECall,EThrow,ETry,ENew,ESwitch,EVars,EFunction,ECast,EPre1,EPreN,EAnon,EUntyped,EUnchecked,EStdFor),
+		Expr(EConst,EArray,EArrayAccess,EBlock,EUnop,EBinop,ETernary,EWhile,EFor,EReturn,EIn,EIf,EField,EContinue,EBreak,ECall,EThrow,ETry,ENew,ESwitch,EVars,EFunction,ECast,EPre1,EPreN,EAnon,EUntyped,EStdFor),
 		Catch,
 		Case,
 		VarExpr,
@@ -194,7 +194,6 @@ data Expr = EConst Constant                     -- literal/ident
           | EUntyped Expr                       -- untyped expr
 
 -- additional AST for c#/js
-		  | EUnchecked Expr -- c# to wrap functions and avoid overflow checks
 		  | EStdFor Expr Expr Expr Expr -- c#/js standard for loop
           deriving (Show)
 

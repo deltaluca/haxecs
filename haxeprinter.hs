@@ -99,7 +99,6 @@ tellExpr (EBreak) = tell "break"
 tellExpr (EThrow x) = tell "throw " >> tellExpr x
 tellExpr (EPre1 pre) = tellPre tellExpr pre
 
---tellExpr (EPreN pre) = tellPre (sequence_ . intersperse (tellLn ";") . map tellExpr) pre
 tellExpr (EPreN pre) = tellPre (mapM_ ((>> tellLn ";") . tellExpr)) pre
 
 tellExpr (EUntyped e) = do { tell "(untyped "; tellExpr e; tell ")" }

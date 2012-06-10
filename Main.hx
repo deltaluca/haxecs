@@ -1,17 +1,15 @@
-package;
+package hello;
 
-typedef A = #if a Int #else Float #end;
+import nape.geom.Vec2;
 
-class Main {
-    static var x:A = 10;
-    static var x:Int = 10;
+typedef A = Int;
 
-    static var y:Void->A = function () { return 10; };
-    static var y:A->A = function (x:A):A { return x+10; };
+class World {
+    static var a:Int = 10;
 
-    static var z(get_z,never):A;
-
-	static function main(x:A):A {
-		trace({ var x:Int = 10; for(i in 0...10) x++; { var y:A = 30; y + x; }; });
+	static function main():Void {
+        var xs = [0,1,2,3];
+        for(i in 0...10) {}
+        for(i in xs) {}
 	}
 }
